@@ -1,0 +1,18 @@
+[project]
+name = "deterministic"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "rich>=13.0.0",
+    "click>=8.1.0",
+    "ruff>=0.7.0",
+    "ty",
+]
+
+[project.scripts]
+validate = "deterministic.cli:main"
+
+[tool.uv]
+package = true
