@@ -11,7 +11,7 @@ from rich.prompt import Prompt
 from rich.syntax import Syntax
 
 from deterministic.settings import get_settings, check_configuration
-from deterministic.agents.create_validator import create_ast_validator
+from deterministic.agents.create_validator import create_ast_validator, create_ast_validator_stream
 
 console = Console()
 
@@ -64,7 +64,7 @@ def ast_validator_command():
     
     # Get code snippet from user
     console.print("\n[bold]Step 1: Provide the code snippet[/bold]")
-    code_snippet = get_multiline_input("Enter the Python code snippet to validate:")
+    code_snippet = get_multiline_input("Enter the bad Python code that your Agent generated:")
     
     if not code_snippet:
         console.print("[red]No code provided. Exiting.[/red]")
@@ -99,14 +99,48 @@ def ast_validator_command():
         import os
         os.environ["ANTHROPIC_API_KEY"] = settings.anthropic_api_key
         
-        with console.status("[bold green]Agent is working...", spinner="dots"):
-            result = asyncio.run(create_ast_validator(
-                user_code=code_snippet,
-                requirements=issue_description
-            ))
+        console.print("\n[bold green]🤖 Starting AST Validator Agent...[/bold green]")
+        console.print("[dim]This may take a few moments as the agent creates and tests the validator.[/dim]\n")
         
-        console.print("\n[bold green]✅ Success![/bold green]")
-        console.print(Panel(result, title="Agent Result", border_style="green"))
+        final_result = None
+        
+        async def stream_callback(event):
+            """Handle streaming events from the agent."""
+            if event.event_type == 'user_prompt':
+                console.print(f"[bold blue]📝 {event.content}[/bold blue]")
+            elif event.event_type == 'model_request_start':
+                console.print(f"[bold yellow]{event.content}[/bold yellow]")
+            elif event.event_type == 'text_chunk':
+                # Print text chunks as they arrive
+                console.print(event.content, end="", style="white")
+            elif event.event_type == 'tool_processing_start':
+                console.print(f"\n[bold cyan]{event.content}[/bold cyan]")
+            elif event.event_type == 'tool_call_start':
+                tool_name = event.metadata.get('tool_name', 'unknown')
+                console.print(f"[cyan]🔧 Calling {tool_name}[/cyan]")
+            elif event.event_type == 'tool_call_end':
+                console.print(f"[green]{event.content}[/green]")
+            elif event.event_type == 'final_result':
+                nonlocal final_result
+                final_result = event.metadata.get('output', event.content)
+                console.print(f"\n[bold green]{event.content}[/bold green]")
+        
+        # Run the streaming agent
+        async def run_streaming_agent():
+            async for event in create_ast_validator_stream(
+                user_code=code_snippet,
+                requirements=issue_description,
+                callback=stream_callback
+            ):
+                # Events are handled by the callback
+                pass
+            return final_result
+        
+        result = asyncio.run(run_streaming_agent())
+        
+        console.print("\n[bold green]✅ Agent completed successfully![/bold green]")
+        if result:
+            console.print(Panel(result, title="Final Result", border_style="green"))
         
         # Show where files were saved
         output_dir = Path("output")

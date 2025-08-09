@@ -163,20 +163,29 @@ class AgentDependencies:
 # Note: We'll initialize with API key from environment/settings at runtime
 def _create_agent():
     """Create the agent with proper API key configuration."""
+    # Check if ANTHROPIC_API_KEY is available
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
-        from deterministic.settings import get_settings
-        settings = get_settings()
-        api_key = settings.anthropic_api_key
+        try:
+            from deterministic.settings import get_settings
+            settings = get_settings()
+            api_key = settings.anthropic_api_key
+            if api_key:
+                # Set environment variable so AnthropicModel can find it
+                os.environ["ANTHROPIC_API_KEY"] = api_key
+        except Exception:
+            pass
     
-    if not api_key:
+    if not api_key and "ANTHROPIC_API_KEY" not in os.environ:
         raise ValueError("ANTHROPIC_API_KEY not found in environment or configuration")
     
+    # Create model - it will use the environment variable automatically
+    model = AnthropicModel("claude-3-5-sonnet-20241022")
+    
     agent = Agent(
-        model=AnthropicModel("claude-3-5-sonnet-20241022", api_key=api_key),
+        model=model,
         system_prompt=SYSTEM_PROMPT,
         deps_type=AgentDependencies,
-        result_type=str,
     )
     
     # Register tools
@@ -305,7 +314,162 @@ The AST validator and comprehensive test suite are ready for use.
         raise ModelRetry(f"Failed to finalize: {e}")
 
 
-# Main execution function
+# Streaming execution function
+async def create_ast_validator_stream(
+    user_code: str,
+    requirements: Optional[str] = None,
+    callback=None
+):
+    """Create an AST validator with comprehensive tests, streaming results.
+    
+    Args:
+        user_code: The code provided by the user to test
+        requirements: Additional requirements for the validator
+        callback: Optional callback function to handle streaming events
+        
+    Yields:
+        Streaming events as they occur
+    """
+    from typing import AsyncIterator
+    from dataclasses import dataclass
+    
+    @dataclass
+    class StreamEvent:
+        event_type: str  # 'text_chunk', 'tool_call_start', 'tool_call_end', 'final_result'
+        content: str
+        metadata: dict = None
+    
+    deps = AgentDependencies()
+    
+    prompt = f"""
+Create a comprehensive AST validator and test suite.
+
+User-provided code that SHOULD BE DETECTED as problematic:
+```python
+{user_code}
+```
+
+Issue Description: {requirements if requirements else "Detect issues in the provided code"}
+
+IMPORTANT: The validator should return is_valid=False (flag as problematic) when it finds code matching the described issue.
+
+Please:
+1. Implement ast_validator.py that detects when code matches the problematic pattern described
+2. Create ast_test.py with comprehensive pytest tests including:
+   - A test with the exact user-provided code (should be flagged as problematic)
+   - Additional examples of the problematic pattern (should be flagged)
+   - Examples of valid code that should NOT be flagged
+   - Edge cases and boundary conditions
+3. Run the tests to ensure everything works correctly
+4. The validator should identify the SPECIFIC issue described, not general code quality
+5. Finalize the implementation once all tests pass
+"""
+    
+    # Create the agent with proper configuration
+    agent = _create_agent()
+    
+    # Use agent.iter() for graph introspection with streaming
+    async with agent.iter(prompt, deps=deps) as agent_run:
+        async for node in agent_run:
+            if agent.is_user_prompt_node(node):
+                # User prompt started
+                event = StreamEvent(
+                    event_type='user_prompt',
+                    content=f"Processing user request: {node.user_prompt}",
+                    metadata={'step': 'user_prompt'}
+                )
+                if callback:
+                    await callback(event)
+                yield event
+                
+            elif agent.is_model_request_node(node):
+                # Model request - stream the text response
+                event = StreamEvent(
+                    event_type='model_request_start',
+                    content="🤖 Agent is thinking...",
+                    metadata={'step': 'model_request'}
+                )
+                if callback:
+                    await callback(event)
+                yield event
+                
+                # Stream the model response text
+                async with node.stream(agent_run.ctx) as request_stream:
+                    async for stream_event in request_stream:
+                        from pydantic_ai.messages import PartDeltaEvent, TextPartDelta
+                        if isinstance(stream_event, PartDeltaEvent):
+                            if isinstance(stream_event.delta, TextPartDelta):
+                                if stream_event.delta.content_delta:
+                                    event = StreamEvent(
+                                        event_type='text_chunk',
+                                        content=stream_event.delta.content_delta,
+                                        metadata={'step': 'streaming_text', 'part_index': stream_event.index}
+                                    )
+                                    if callback:
+                                        await callback(event)
+                                    yield event
+                                
+            elif agent.is_call_tools_node(node):
+                # Tool calls - show what tools are being called
+                event = StreamEvent(
+                    event_type='tool_processing_start',
+                    content="🔧 Using tools to create and test files...",
+                    metadata={'step': 'tool_processing'}
+                )
+                if callback:
+                    await callback(event)
+                yield event
+                
+                # Stream tool calls and results
+                async with node.stream(agent_run.ctx) as tool_stream:
+                    async for stream_event in tool_stream:
+                        from pydantic_ai.messages import FunctionToolCallEvent, FunctionToolResultEvent
+                        if isinstance(stream_event, FunctionToolCallEvent):
+                            # Tool call started
+                            tool_name = stream_event.part.tool_name
+                            tool_args = getattr(stream_event.part, 'args', {})
+                            
+                            event = StreamEvent(
+                                event_type='tool_call_start',
+                                content=f"🔧 Starting {tool_name}",
+                                metadata={
+                                    'step': 'tool_call_start',
+                                    'tool_name': tool_name,
+                                    'tool_args': tool_args
+                                }
+                            )
+                            if callback:
+                                await callback(event)
+                            yield event
+                            
+                        elif isinstance(stream_event, FunctionToolResultEvent):
+                            # Tool call completed
+                            event = StreamEvent(
+                                event_type='tool_call_end',
+                                content=f"✅ Tool completed: {stream_event.result.content[:100]}...",
+                                metadata={
+                                    'step': 'tool_call_end',
+                                    'tool_call_id': getattr(stream_event, 'tool_call_id', None),
+                                    'result': stream_event.result.content
+                                }
+                            )
+                            if callback:
+                                await callback(event)
+                            yield event
+                            
+            elif agent.is_end_node(node):
+                # Final result
+                event = StreamEvent(
+                    event_type='final_result',
+                    content=f"✅ Complete! {node.data.output}",
+                    metadata={'step': 'final_result', 'output': node.data.output}
+                )
+                if callback:
+                    await callback(event)
+                yield event
+
+
+# Main execution function (non-streaming)
 async def create_ast_validator(
     user_code: str,
     requirements: Optional[str] = None
@@ -349,7 +513,7 @@ Please:
     agent = _create_agent()
     
     result = await agent.run(prompt, deps=deps)
-    return result.data
+    return result.output
 
 
 # Example usage
