@@ -1,17 +1,16 @@
-"""CLI interface for the AST validator agent."""
+"""AST validator creation command."""
 
 import asyncio
 import sys
 from pathlib import Path
-from textwrap import dedent
 
 import click
 from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Prompt
 from rich.syntax import Syntax
-from rich.text import Text
 
+from deterministic.settings import get_settings, check_configuration
 from deterministic.agents.create_validator import create_ast_validator
 
 console = Console()
@@ -50,12 +49,12 @@ def get_multiline_input(prompt_text: str) -> str:
 
 
 @click.command()
-def main() -> None:
-    """Interactive AST validator creation tool.
+def ast_validator_command():
+    """Create comprehensive AST validators and tests for Python code."""
+    # Check configuration first
+    if not check_configuration():
+        sys.exit(1)
     
-    This tool helps you create comprehensive AST validators and tests
-    for Python code snippets with specific issues.
-    """
     console.print("\n")
     console.print(Panel.fit(
         "[bold magenta]AST Validator Agent[/bold magenta]\n"
@@ -90,20 +89,16 @@ def main() -> None:
         console.print("[red]Operation cancelled.[/red]")
         sys.exit(0)
     
-    # Check for API key
-    import os
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        console.print("\n[yellow]⚠️  Warning: ANTHROPIC_API_KEY environment variable not set.[/yellow]")
-        console.print("[dim]Please set your Anthropic API key:[/dim]")
-        console.print("  export ANTHROPIC_API_KEY='your-api-key-here'")
-        if not Prompt.ask("\n[yellow]Continue anyway?[/yellow]", choices=["y", "n"], default="n") == "y":
-            sys.exit(1)
-    
     # Run the agent
     console.print("\n[bold cyan]🤖 Starting AST Validator Agent...[/bold cyan]")
     console.print("[dim]This may take a few moments as the agent creates and tests the validator.[/dim]\n")
     
     try:
+        # Set environment variable for the agent
+        settings = get_settings()
+        import os
+        os.environ["ANTHROPIC_API_KEY"] = settings.anthropic_api_key
+        
         with console.status("[bold green]Agent is working...", spinner="dots"):
             result = asyncio.run(create_ast_validator(
                 user_code=code_snippet,
@@ -138,7 +133,3 @@ def main() -> None:
         console.print(f"\n[red]Error: {e}[/red]")
         console.print("[dim]Please check your configuration and try again.[/dim]")
         sys.exit(1)
-
-
-if __name__ == "__main__":
-    main()

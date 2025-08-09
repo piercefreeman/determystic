@@ -160,16 +160,34 @@ class AgentDependencies:
 
 
 # Create the agent at module level (idiomatic pydantic-ai pattern)
-ast_validator_agent = Agent(
-    model=AnthropicModel("claude-3-5-sonnet-20241022"),
-    system_prompt=SYSTEM_PROMPT,
-    deps_type=AgentDependencies,
-    result_type=str,
-)
+# Note: We'll initialize with API key from environment/settings at runtime
+def _create_agent():
+    """Create the agent with proper API key configuration."""
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        from deterministic.settings import get_settings
+        settings = get_settings()
+        api_key = settings.anthropic_api_key
+    
+    if not api_key:
+        raise ValueError("ANTHROPIC_API_KEY not found in environment or configuration")
+    
+    agent = Agent(
+        model=AnthropicModel("claude-3-5-sonnet-20241022", api_key=api_key),
+        system_prompt=SYSTEM_PROMPT,
+        deps_type=AgentDependencies,
+        result_type=str,
+    )
+    
+    # Register tools
+    agent.tool(write_file)
+    agent.tool(edit_file)
+    agent.tool(run_test)
+    agent.tool(finalize_test)
+    
+    return agent
 
-
-# Register tools using the @agent.tool decorator pattern
-@ast_validator_agent.tool
+# Tool functions (will be registered with the agent)
 async def write_file(ctx: RunContext[AgentDependencies], input: FileWriteInput) -> str:
     """Write content to a file (ast_validator.py or ast_test.py)."""
     try:
@@ -187,7 +205,6 @@ async def write_file(ctx: RunContext[AgentDependencies], input: FileWriteInput) 
         raise ModelRetry(f"Failed to write file: {e}")
 
 
-@ast_validator_agent.tool
 async def edit_file(ctx: RunContext[AgentDependencies], input: FileEditInput) -> str:
     """Edit a file by replacing a string with a new string."""
     try:
@@ -218,7 +235,6 @@ async def edit_file(ctx: RunContext[AgentDependencies], input: FileEditInput) ->
         raise ModelRetry(f"Failed to edit file: {e}")
 
 
-@ast_validator_agent.tool
 async def run_test(ctx: RunContext[AgentDependencies], input: TestRunInput) -> str:
     """Run pytest on the test file using uv."""
     try:
@@ -256,7 +272,6 @@ async def run_test(ctx: RunContext[AgentDependencies], input: TestRunInput) -> s
         raise ModelRetry(f"Failed to run tests: {e}")
 
 
-@ast_validator_agent.tool
 async def finalize_test(ctx: RunContext[AgentDependencies], input: FinalizeInput) -> str:
     """Finalize the test suite and save files."""
     try:
@@ -330,7 +345,10 @@ Please:
 5. Finalize the implementation once all tests pass
 """
     
-    result = await ast_validator_agent.run(prompt, deps=deps)
+    # Create the agent with proper configuration
+    agent = _create_agent()
+    
+    result = await agent.run(prompt, deps=deps)
     return result.data
 
 

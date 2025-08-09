@@ -13,11 +13,12 @@ dependencies = [
     "anthropic>=0.39.0",
     "pytest>=8.0.0",
     "pytest-asyncio>=0.24.0",
+    "pyyaml>=6.0.0",
+    "pydantic-settings>=2.0.0",
 ]
 
 [project.scripts]
-validate = "deterministic.cli:main"
-create-ast-validator = "deterministic.ast_cli:main"
+deterministic = "deterministic.cli:cli"
 
 [tool.uv]
 package = true
