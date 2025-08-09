@@ -9,10 +9,15 @@ dependencies = [
     "click>=8.1.0",
     "ruff>=0.7.0",
     "ty",
+    "pydantic-ai>=0.0.14",
+    "anthropic>=0.39.0",
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
 ]
 
 [project.scripts]
 validate = "deterministic.cli:main"
+create-ast-validator = "deterministic.ast_cli:main"
 
 [tool.uv]
 package = true
