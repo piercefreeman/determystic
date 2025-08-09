@@ -330,7 +330,6 @@ async def create_ast_validator_stream(
     Yields:
         Streaming events as they occur
     """
-    from typing import AsyncIterator
     from dataclasses import dataclass
     
     @dataclass

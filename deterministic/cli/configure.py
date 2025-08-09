@@ -71,7 +71,7 @@ def configure_command(api_key: str | None):
             console.print(f"  • Anthropic API Key: {masked_key}")
         
         console.print("\n[green]You can now use the deterministic tools![/green]")
-        console.print("[dim]Try: deterministic create-ast-validator[/dim]")
+        console.print("[dim]Try: deterministic new-validator[/dim]")
         
     except Exception as e:
         console.print(f"\n[red]Error saving configuration: {e}[/red]")

@@ -13,6 +13,7 @@ from rich.spinner import Spinner
 from rich.table import Table
 from rich.text import Text
 
+from deterministic.io import detect_project_path
 from deterministic.validators import (
     ASTParserValidator,
     RuffValidator,
@@ -24,7 +25,7 @@ console = Console()
 
 
 @click.command()
-@click.argument("path", type=click.Path(exists=True, path_type=Path), default=".")
+@click.argument("path", type=click.Path(path_type=Path), required=False)
 @click.option(
     "--validator",
     "-v",
@@ -37,10 +38,19 @@ console = Console()
     is_flag=True,
     help="Show detailed output",
 )
-def validate_command(path: Path, validator: str, verbose: bool):
+def validate_command(path: Path | None, validator: str, verbose: bool):
     """Run validation on a Python project."""
     # Note: This command doesn't require API configuration
-    asyncio.run(run_validation(path, validator, verbose))
+    
+    # Use path detection logic to determine the target path
+    target_path = detect_project_path(path)
+    
+    # Ensure the target path exists
+    if not target_path.exists():
+        console.print(f"[red]Error: Path '{target_path}' does not exist.[/red]")
+        sys.exit(1)
+    
+    asyncio.run(run_validation(target_path, validator, verbose))
 
 
 def create_status_table(validators: list, results: dict) -> Table:
