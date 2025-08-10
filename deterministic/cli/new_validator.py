@@ -15,9 +15,6 @@ from deterministic.io import detect_project_path
 from deterministic.project_config import ProjectConfigManager
 from deterministic.settings import get_settings, check_configuration
 from deterministic.agents.create_validator import create_ast_validator_stream
-from deterministic.validators.dynamic_ast import DynamicASTValidator
-from deterministic.validators.static_analysis import StaticAnalysisValidator
-from deterministic.validators.base import ValidationResult
 
 console = Console()
 
@@ -55,10 +52,9 @@ def get_multiline_input(prompt_text: str) -> str:
 
 
 @click.command()
-@click.option("--create", is_flag=True, help="Create a new validator interactively")
 @click.argument("path", type=click.Path(path_type=Path), required=False)
-def ast_validator_command(create: bool, path: Path | None):
-    """Run existing AST validators against Python files, or create new validators."""
+def new_validator_command(path: Path):
+    """Run the interactive validator creation workflow."""
     # Check configuration first
     if not check_configuration():
         sys.exit(1)
@@ -74,16 +70,6 @@ def ast_validator_command(create: bool, path: Path | None):
     # Initialize project config manager
     config_manager = ProjectConfigManager(target_path)
     
-    if create:
-        # Run the create validator workflow
-        create_validator_workflow(target_path, config_manager)
-    else:
-        # Run existing validators
-        run_existing_validators(target_path, config_manager)
-
-
-def create_validator_workflow(target_path: Path, config_manager: ProjectConfigManager):
-    """Run the interactive validator creation workflow."""
     # Check if project is already initialized
     if config_manager.exists():
         console.print("[green]✓[/green] Found existing deterministic project")
@@ -258,88 +244,4 @@ def create_validator_workflow(target_path: Path, config_manager: ProjectConfigMa
     except Exception as e:
         console.print(f"\n[red]Error: {e}[/red]")
         console.print("[dim]Please check your configuration and try again.[/dim]")
-        sys.exit(1)
-
-
-def run_existing_validators(target_path: Path, config_manager: ProjectConfigManager):
-    """Run all existing validators using the new format."""
-    console.print(f"\n[bold cyan]Running validators on: {target_path}[/bold cyan]\n")
-    
-    # Get all validators using create_validators class methods
-    all_validators = []
-    
-    # Get dynamic AST validators
-    dynamic_validators = DynamicASTValidator.create_validators(target_path)
-    all_validators.extend(dynamic_validators)
-    
-    # Get static analysis validators
-    static_validators = StaticAnalysisValidator.create_validators(target_path)
-    all_validators.extend(static_validators)
-    
-    if not all_validators:
-        console.print("[yellow]No validators found. Use --create to create new validators.[/yellow]")
-        return
-    
-    console.print(f"[dim]Found {len(all_validators)} validator(s)[/dim]\n")
-    
-    async def run_all_validators():
-        """Run all validators in parallel."""
-        tasks = []
-        for validator in all_validators:
-            console.print(f"[cyan]• Running {validator.display_name}[/cyan]")
-            task = validator.validate(target_path)
-            tasks.append((validator, task))
-        
-        # Wait for all validators to complete
-        results = []
-        for validator, task in tasks:
-            try:
-                result = await task
-                results.append((validator, result))
-            except Exception as e:
-                results.append((validator, ValidationResult(
-                    success=False, 
-                    output=f"Error running validator: {e}"
-                )))
-        
-        return results
-    
-    # Run validators
-    try:
-        results = asyncio.run(run_all_validators())
-        
-        # Display results
-        console.print("\n[bold]Results:[/bold]\n")
-        
-        success_count = 0
-        total_count = len(results)
-        
-        for validator, result in results:
-            status = "[green]✓[/green]" if result.success else "[red]✗[/red]"
-            console.print(f"{status} {validator.display_name}")
-            
-            if result.output and result.output.strip():
-                # Show output in a panel
-                console.print(Panel(
-                    result.output,
-                    title=f"{validator.display_name} Output",
-                    border_style="green" if result.success else "red",
-                    padding=(0, 1)
-                ))
-            
-            if result.success:
-                success_count += 1
-            
-            console.print()  # Empty line for spacing
-        
-        # Summary
-        if success_count == total_count:
-            console.print(f"[bold green]All {total_count} validator(s) passed! ✅[/bold green]")
-        else:
-            failed_count = total_count - success_count
-            console.print(f"[bold red]{failed_count} of {total_count} validator(s) failed ❌[/bold red]")
-            sys.exit(1)
-            
-    except Exception as e:
-        console.print(f"[red]Error running validators: {e}[/red]")
         sys.exit(1)

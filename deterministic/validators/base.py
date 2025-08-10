@@ -28,8 +28,8 @@ class BaseValidator(ABC):
         self.name = name
         self.path = path
     
-    @abstractmethod
     @classmethod
+    @abstractmethod
     def create_validators(cls, path: Path) -> list["BaseValidator"]:
         """
         Factory function that can create multiple validators for a given path.

@@ -16,8 +16,7 @@ from rich.text import Text
 from deterministic.io import detect_project_path
 from deterministic.validators import (
     DynamicASTValidator,
-    RuffValidator,
-    TypeValidator,
+    StaticAnalysisValidator,
 )
 
 console = Console()
@@ -92,12 +91,15 @@ async def run_validation(path: Path, verbose: bool):
         border_style="cyan"
     ))
     
-    # Load dynamic AST validators from project configuration
-    dynamic_ast_validator = DynamicASTValidator(path)
-    dynamic_validators = dynamic_ast_validator.validators
+    # Get all validators using the create_validators class method pattern
+    validators = []
     
-    # Run all validators: built-in + dynamic AST validators
-    validators = [RuffValidator(path), TypeValidator(path)] + dynamic_validators
+    # Add dynamic AST validators
+    validators.extend(DynamicASTValidator.create_validators(path))
+    
+    # Add static analysis validators
+    validators.extend(StaticAnalysisValidator.create_validators(path))
+    
     display_validators = validators
     
     # Check if we have any validators to run
@@ -109,7 +111,7 @@ async def run_validation(path: Path, verbose: bool):
     
     # Create live display
     with Live(create_status_table(display_validators, results), console=console, refresh_per_second=4):
-        # Run validation
+        # Run validation in parallel
         tasks = []
         for validator in validators:
             async def run_and_store(v):

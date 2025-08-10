@@ -4,7 +4,7 @@
 import click
 
 from deterministic.cli.validate import validate_command
-from deterministic.cli.ast_validator import ast_validator_command
+from deterministic.cli.new_validator import new_validator_command
 from deterministic.cli.configure import configure_command
 from deterministic.cli.list_validators import list_validators_command
 
@@ -18,6 +18,6 @@ def cli():
 
 # Register subcommands
 cli.add_command(validate_command, name="validate")
-cli.add_command(ast_validator_command, name="new-validator")
+cli.add_command(new_validator_command, name="new-validator")
 cli.add_command(configure_command, name="configure")
 cli.add_command(list_validators_command, name="list-validators")
