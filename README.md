@@ -1,4 +1,6 @@
-# determystic
+# Determystic
+
+![Determystic Logo](https://raw.githubusercontent.com/piercefreeman/determystic/main/media/header.png)
 
 Determystic is a library that forces your agents to give you a coding style that you're happy with - _deterministically_ every time.
 
