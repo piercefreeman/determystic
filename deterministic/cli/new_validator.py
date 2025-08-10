@@ -13,9 +13,24 @@ from rich.syntax import Syntax
 
 from deterministic.io import detect_project_path
 from deterministic.configs.project import ProjectConfigManager
-from deterministic.agents.create_validator import create_ast_validator_stream
+from deterministic.configs.system import DeterministicSettings
+from deterministic.agents.create_validator import stream_create_validator
 
 console = Console()
+
+
+def check_configuration() -> bool:
+    """Check if the system configuration is valid."""
+    try:
+        settings = DeterministicSettings.load_from_disk()
+        return bool(settings.anthropic_api_key)
+    except Exception:
+        return False
+
+
+def get_settings() -> DeterministicSettings:
+    """Get the system settings."""
+    return DeterministicSettings.load_from_disk()
 
 
 def get_multiline_input(prompt_text: str) -> str:
@@ -67,14 +82,18 @@ def new_validator_command(path: Path):
         sys.exit(1)
     
     # Initialize project config manager
-    config_manager = ProjectConfigManager(target_path)
-    
-    # Check if project is already initialized
-    if config_manager.exists():
+    config_path = target_path / ".deterministic" / "config.toml"
+    if config_path.exists():
         console.print("[green]✓[/green] Found existing deterministic project")
+        ProjectConfigManager.set_runtime_custom_path(target_path / ".deterministic")
+        config_manager = ProjectConfigManager.load_from_disk()
     else:
         console.print("[yellow]Initializing new deterministic project...[/yellow]")
-        config_manager.initialize_project()
+        # Ensure directory exists
+        (target_path / ".deterministic").mkdir(parents=True, exist_ok=True)
+        ProjectConfigManager.set_runtime_custom_path(target_path / ".deterministic")
+        config_manager = ProjectConfigManager()
+        config_manager.save_to_disk()
         console.print("[green]✓[/green] Created .deterministic directory structure")
     
     console.print("\n")
@@ -115,7 +134,7 @@ def new_validator_command(path: Path):
         sys.exit(1)
     
     # Check if validator already exists
-    existing_validators = config_manager.list_validators()
+    existing_validators = list(config_manager.validators.values())
     if any(v.name == validator_name for v in existing_validators):
         if not Prompt.ask(f"\n[yellow]Validator '{validator_name}' already exists. Overwrite?[/yellow]", choices=["y", "n"], default="n") == "y":
             console.print("[red]Operation cancelled.[/red]")
@@ -136,12 +155,20 @@ def new_validator_command(path: Path):
     console.print("[dim]This may take a few moments as the agent creates and tests the validator.[/dim]\n")
     
     try:
-        # Set environment variable for the agent
+        # Get system settings and create Anthropic client
         settings = get_settings()
-        os.environ["ANTHROPIC_API_KEY"] = settings.anthropic_api_key
+        
+        # Import Anthropic model
+        from pydantic_ai.models.anthropic import AnthropicModel
+        anthropic_client = AnthropicModel("claude-sonnet-4-20250514")
+        
+        # Set API key for the client
+        if settings.anthropic_api_key:
+            os.environ["ANTHROPIC_API_KEY"] = settings.anthropic_api_key
         
         final_result = None
-        file_contents = {}
+        validation_contents = ""
+        test_contents = ""
         
         async def stream_callback(event):
             """Handle streaming events from the agent."""
@@ -160,9 +187,10 @@ def new_validator_command(path: Path):
             elif event.event_type == 'tool_call_end':
                 console.print(f"[green]{event.content}[/green]")
             elif event.event_type == 'final_result':
-                nonlocal final_result, file_contents
+                nonlocal final_result, validation_contents, test_contents
                 final_result = event.metadata.get('output', event.content)
-                file_contents = event.metadata.get('file_contents', {})
+                validation_contents = event.metadata.get('validation_contents', '')
+                test_contents = event.metadata.get('test_contents', '')
                 console.print(f"\n[bold green]{event.content}[/bold green]")
         
         # Run the streaming agent in the target directory
@@ -173,9 +201,11 @@ def new_validator_command(path: Path):
                 # Change to target directory for agent execution
                 os.chdir(target_path)
                 
-                async for event in create_ast_validator_stream(
+                async for event in stream_create_validator(
                     user_code=code_snippet,
                     requirements=issue_description,
+                    anthropic_client=anthropic_client,
+                    project_root=target_path,
                     callback=stream_callback
                 ):
                     # Events are handled by the callback
@@ -191,46 +221,41 @@ def new_validator_command(path: Path):
         if result:
             console.print(Panel(result, title="Final Result", border_style="green"))
         
-        # Process generated files from agent file contents
-        if file_contents:
+        # Process generated files from agent virtual contents
+        if validation_contents or test_contents:
             console.print("\n[bold]Processing generated files...[/bold]")
             
-            validator_content = None
-            test_content = None
-            
-            # Extract validator and test content from file_contents
-            for filename, content in file_contents.items():
-                console.print(f"  • Found generated file: {filename}")
-                
-                # Determine if this is a validator or test file based on content/name
-                if "test_" in filename.lower() or "test" in filename.lower():
-                    test_content = content
-                else:
-                    validator_content = content
+            if validation_contents:
+                console.print("  • Generated validator code")
+            if test_contents:
+                console.print("  • Generated test code")
             
             # Save files to .deterministic structure using config manager
-            if validator_content:
+            if validation_contents:
                 try:
-                    validator_path, test_path = config_manager.add_validator_files(
-                        validator_name=validator_name,
-                        validator_content=validator_content,
-                        test_content=test_content,
+                    validator_file = config_manager.new_validation(
+                        name=validator_name,
+                        validator_script=validation_contents,
+                        test_script=test_contents or "",
                         description=issue_description
                     )
                     
+                    # Save the config to disk
+                    config_manager.save_to_disk()
+                    
                     console.print("\n[bold green]✅ Validator saved successfully![/bold green]")
-                    console.print(f"  • Validator: {validator_path}")
-                    if test_path:
-                        console.print(f"  • Test: {test_path}")
+                    console.print(f"  • Validator: {validator_file.validator_path}")
+                    if validator_file.test_path:
+                        console.print(f"  • Test: {validator_file.test_path}")
                     
                     # Show preview of the validator
-                    lines = validator_content.split("\n")[:10]
+                    lines = validation_contents.split("\n")[:10]
                     preview = "\n".join(lines)
-                    if len(validator_content.split("\n")) > 10:
+                    if len(validation_contents.split("\n")) > 10:
                         preview += "\n..."
                     
                     syntax = Syntax(preview, "python", theme="monokai", line_numbers=False)
-                    console.print(Panel(syntax, title=f"Preview: {validator_name}.deterministic", border_style="green"))
+                    console.print(Panel(syntax, title=f"Preview: {validator_name}", border_style="green"))
                     
                 except Exception as e:
                     console.print(f"[red]Error saving validator files: {e}[/red]")
