@@ -59,7 +59,7 @@ build-backend = "setuptools.build_meta"
 name = "temp-validator"
 version = "0.1.0"
 dependencies = [
-    "deterministic @ file://{self.project_root.absolute()}",
+    "deterministic @ file://{self.deterministic_package_path.absolute()}",
     "pytest>=6.0"
 ]
 
@@ -92,7 +92,7 @@ where = ["."]
             package_dir = self.create_test_package(validator_code, test_code)
             
             result = subprocess.run(
-                ["uv run", "pytest", "test_validator.py", "-v"],
+                ["uv", "run", "pytest", "test_validator.py", "-v"],
                 cwd=package_dir,
                 capture_output=True,
                 text=True,

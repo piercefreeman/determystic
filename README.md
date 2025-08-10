@@ -1,16 +1,24 @@
 # determystic
 
-Determystic is a library to force your agents to give you a coding style that you're happy with, deterministically every time.
+Determystic is a library that forces your agents to give you a coding style that you're happy with - _deterministically_ every time.
 
-It works by creating deterministic validators for your coding conventions, using the AST of your programming language. If you see a bad piece of code and can describe why it's bad and why you never want to see code like that in the future, there's a good chance we can write a deterministic validator to make sure it never happens again.
+It works by creating validators for your coding conventions, using the AST of your programming language. If you see a bad piece of code and can describe why it's bad and why you never want to see code like that in the future, there's a good chance we can write a deterministic validator to make sure it never happens again.
 
 ## Getting Started
 
 We'll look into adding a MCP server in the future. But for the time being just asking Claude Code / Cursor to run our validation script is usually good enough to get the job done.
 
-### Claude Code
+Append to your `.cursorrules` (Cursor) or `CLAUDE.md` (Claude Code).
 
-### Cursor
+```
+Before yielding results, you should ALWAYS call `uvx determystic validate`.
+```
+
+When you have an issue, you can add a special validation case using:
+
+```bash
+uvx deterministic new-validator
+```
 
 ## Background
 

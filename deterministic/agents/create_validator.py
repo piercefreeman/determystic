@@ -111,9 +111,9 @@ def process(value: Optional[str]) -> None:  # BAD: Use str | None
 
 ## Tool Usage Instructions
 
-- Use `write_validator` to create the AST validator code (legacy - use write_file instead)
-- Use `write_tests` to create comprehensive test cases (legacy - use write_file instead)
-- Use `write_file` to write any file with a specified filename
+- Use `write_file` to write files with specific filenames:
+  - Use filename "validator.py" for the AST validator implementation
+  - Use filename "test_validator.py" for the test cases
 - Use `read_file` to read the contents of any file
 - Use `edit_file` to edit specific parts of a file
 - Use `run_tests` to execute tests and verify they work correctly
@@ -232,26 +232,6 @@ agent = Agent(
     system_prompt=SYSTEM_PROMPT,
 )
 
-
-# Tools
-@agent.tool
-async def write_validator(
-    ctx: RunContext[AgentDependencies], 
-    input: WriteValidatorInput
-) -> str:
-    """Write the AST validator code content."""
-    ctx.deps.validation_contents = input.content
-    return f"✅ Validator code written ({len(input.content)} characters)"
-
-
-@agent.tool
-async def write_tests(
-    ctx: RunContext[AgentDependencies], 
-    input: WriteTestsInput
-) -> str:
-    """Write the test code content."""
-    ctx.deps.test_contents = input.content
-    return f"✅ Test code written ({len(input.content)} characters)"
 
 
 @agent.tool
@@ -465,27 +445,11 @@ async def create_ast_validator(
     """
     deps = AgentDependencies()
     
-    # Create agent with provided client
-    run_agent = Agent(
-        model=anthropic_client,
-        system_prompt=SYSTEM_PROMPT,
-        deps_type=AgentDependencies,
-    )
-    
-    # Register tools
-    run_agent.tool(write_validator)
-    run_agent.tool(write_tests)
-    run_agent.tool(write_file)
-    run_agent.tool(read_file)
-    run_agent.tool(edit_file)
-    run_agent.tool(run_tests)
-    run_agent.tool(finalize)
-    
     # Format the prompt
     prompt = TASK_PROMPT_TEMPLATE.format(
         user_code=user_code,
         requirements=requirements or "Detect issues in the provided code"
     )
     
-    result = await run_agent.run(prompt, deps=deps)
+    result = await agent.run(prompt, model=anthropic_client, deps=deps)
     return result.output, deps.validation_contents, deps.test_contents
