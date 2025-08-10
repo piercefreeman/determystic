@@ -25,6 +25,9 @@ class DynamicASTValidator(BaseValidator):
         
         # Find .determystic config
         config_manager = ProjectConfigManager.load_from_disk()
+        
+        if not config_manager or not config_manager.validators:
+            return validators
 
         # Load each validator file as a separate validator instance
         for validator_file in config_manager.validators.values():

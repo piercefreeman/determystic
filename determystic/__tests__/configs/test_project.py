@@ -72,43 +72,27 @@ class TestValidatorFile:
 class TestProjectConfigManagerClassMethods:
     """Test class methods of ProjectConfigManager."""
     
-    @pytest.mark.parametrize("custom_path,should_create_config", [
-        ("custom/path", True),   # Non-existent path should create config
-        ("existing/path", False), # Existing path should not create config
+    @pytest.mark.parametrize("custom_path", [
+        "custom/path",
+        "existing/path",
     ])
     def test_set_runtime_custom_path(
         self, 
-        custom_path: str, 
-        should_create_config: bool
+        custom_path: str
     ) -> None:
-        """Test setting runtime custom path with different scenarios."""
+        """Test setting runtime custom path."""
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
             path = temp_path / custom_path
             
-            if not should_create_config:
-                # Pre-create the path for the "existing path" test case
-                path.mkdir(parents=True, exist_ok=True)
-                config_file = path / "config.toml"
-                config_file.write_text("[version]\nvalue = '1.0'\n")
+            # set_runtime_custom_path only sets the path, it doesn't create config files
+            ProjectConfigManager.set_runtime_custom_path(path)
             
-            # Mock save_to_disk to avoid actual file operations during auto-creation
-            with patch.object(ProjectConfigManager, 'save_to_disk') as mock_save:
-                ProjectConfigManager.set_runtime_custom_path(path)
-                
-                # Verify the runtime path was set
-                assert ProjectConfigManager.runtime_custom_path == path
-                
-                # Verify save_to_disk was called only if path didn't exist
-                if should_create_config:
-                    mock_save.assert_called_once()
-                    # save_to_disk is called without arguments
-                    mock_save.assert_called_with()
-                else:
-                    mock_save.assert_not_called()
-                
-                # Clean up
-                ProjectConfigManager.runtime_custom_path = None
+            # Verify the runtime path was set
+            assert ProjectConfigManager.runtime_custom_path == path / ".determystic"
+            
+            # Clean up
+            ProjectConfigManager.runtime_custom_path = None
 
     @pytest.mark.parametrize("runtime_path_set,expected_paths_count", [
         (True, 1),   # With runtime path set, should return 1 path

@@ -35,13 +35,15 @@ def validate_command(path: Path | None, verbose: bool):
     # Note: This command doesn't require API configuration
     
     # Use path detection logic to determine the target path
-    target_path = detect_pyproject_path(path)
+    target_path = detect_pyproject_path(path or Path.cwd())
     
     # Ensure the target path exists
-    if not target_path.exists():
+    if not target_path or not target_path.exists():
         console.print(f"[red]Error: Path '{target_path}' does not exist.[/red]")
         sys.exit(1)
     
+    # At this point target_path is guaranteed to exist
+    assert target_path is not None
     asyncio.run(run_validation(target_path, verbose))
 
 
@@ -85,7 +87,7 @@ def create_status_table(validators: list, results: dict) -> Table:
     return table
 
 
-async def run_validation(path: Path | None, verbose: bool):
+async def run_validation(path: Path, verbose: bool):
     """Run the validation process."""
     console.print(Panel.fit(
         f"[bold cyan]Validating:[/bold cyan] {path.absolute()}",
@@ -93,7 +95,7 @@ async def run_validation(path: Path | None, verbose: bool):
     ))
     
     if path:
-        ProjectConfigManager.set_runtime_custom_path(path / ".determystic")
+        ProjectConfigManager.set_runtime_custom_path(path)
 
     # Get all validators using the create_validators class method pattern
     validators = []
@@ -168,4 +170,4 @@ async def run_validation(path: Path | None, verbose: bool):
     
     # Set exit code based on results
     if not all_passed:
-        sys.exit(1)
+        sys.exit(1)  # type: ignore

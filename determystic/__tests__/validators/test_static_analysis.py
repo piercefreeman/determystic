@@ -60,8 +60,8 @@ class TestStaticAnalysisValidator:
             # Verify the command was called correctly
             mock_exec.assert_called_once_with(
                 *command,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,  # type: ignore
+                stderr=asyncio.subprocess.PIPE,  # type: ignore
                 cwd=path
             )
 
@@ -140,8 +140,8 @@ class TestStaticAnalysisValidator:
             # Verify command was unpacked correctly (not passed as a list)
             mock_exec.assert_called_once_with(
                 "ruff", "check", "file.py", "--no-fix",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,  # type: ignore
+                stderr=asyncio.subprocess.PIPE,  # type: ignore
                 cwd=path
             )
 

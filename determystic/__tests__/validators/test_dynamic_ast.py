@@ -40,7 +40,7 @@ class TestDynamicASTValidator:
     """Test suite for DynamicASTValidator."""
 
     @pytest.fixture
-    def temp_project_dir(self) -> Path:
+    def temp_project_dir(self):
         """Create a temporary project directory with .determystic structure."""
         with tempfile.TemporaryDirectory() as temp_dir:
             project_path = Path(temp_dir)
@@ -149,7 +149,7 @@ validator_path = "validations/test_validator.determystic"
 ''')
         
         # Set the runtime custom path to point to our temp directory
-        ProjectConfigManager.set_runtime_custom_path(temp_project_dir / ".determystic")
+        ProjectConfigManager.set_runtime_custom_path(temp_project_dir)
         # Clear cached path
         ProjectConfigManager._found_path = None
         try:
@@ -157,7 +157,7 @@ validator_path = "validations/test_validator.determystic"
             
             assert len(validators) == 1
             assert validators[0].name == "test_validator"
-            assert validators[0].traverser_class is not None
+            assert validators[0].traverser_class is not None  # type: ignore
         finally:
             # Clean up
             ProjectConfigManager.runtime_custom_path = None
@@ -184,7 +184,7 @@ validator_path = "validations/test_validator.determystic"
 ''')
         
         # Set the runtime custom path to point to our temp directory
-        ProjectConfigManager.set_runtime_custom_path(temp_project_dir / ".determystic")
+        ProjectConfigManager.set_runtime_custom_path(temp_project_dir)
         # Clear cached path
         ProjectConfigManager._found_path = None
         try:
@@ -192,7 +192,7 @@ validator_path = "validations/test_validator.determystic"
             
             assert len(validators) == 1
             assert validators[0].name == "test_validator"
-            assert validators[0].traverser_class is not None
+            assert validators[0].traverser_class is not None  # type: ignore
         finally:
             # Clean up
             ProjectConfigManager.runtime_custom_path = None
@@ -211,7 +211,7 @@ validator_path = "validations/missing.determystic"
 ''')
         
         # Set the runtime custom path to point to our temp directory
-        ProjectConfigManager.set_runtime_custom_path(temp_project_dir / ".determystic")
+        ProjectConfigManager.set_runtime_custom_path(temp_project_dir)
         # Clear cached path
         ProjectConfigManager._found_path = None
         try:

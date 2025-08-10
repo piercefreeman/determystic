@@ -2,6 +2,7 @@
 
 import sys
 from pathlib import Path
+from typing import overload
 
 from pydantic import Field
 from pydantic_settings import SettingsConfigDict
@@ -35,11 +36,21 @@ class DeterministicSettings(BaseConfig):
         config_dir.mkdir(exist_ok=True)
         return [config_dir / "config.toml"]
 
+    @overload
     @classmethod
-    def load_from_disk(cls) -> "DeterministicSettings":
+    def load_from_disk(cls, required: bool = True) -> "DeterministicSettings": ...
+    
+    @overload
+    @classmethod
+    def load_from_disk(cls, required: bool) -> "DeterministicSettings | None": ...
+    
+    @classmethod
+    def load_from_disk(cls, required: bool = True) -> "DeterministicSettings | None":
         try:
             return super().load_from_disk()
         except Exception:
+            if not required:
+                return None
             CONSOLE.print(Panel(
                 "[bold red]Configuration Required[/bold red]\n\n"
                 "This tool requires an Anthropic API key to function.\n"
@@ -47,4 +58,4 @@ class DeterministicSettings(BaseConfig):
                 "[bold cyan]determystic configure[/bold cyan]",
                 border_style="red"
             ))
-            sys.exit(1)
+            sys.exit(1)  # type: ignore

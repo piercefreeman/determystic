@@ -4,7 +4,7 @@ import tomllib
 import tomli_w
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import ClassVar, Optional, Type, TypeVar
+from typing import ClassVar, Type, TypeVar
 
 from pydantic import BaseModel
 
@@ -35,12 +35,14 @@ class BaseConfig(BaseModel, ABC):
                     cls._found_path = path
                     break
             else:
-                # Only raise if no path was found
-                raise FileNotFoundError(f"No configuration file found in {possible_paths}")
+                # Assume the first path is the one we want
+                cls._found_path = possible_paths[0]
+                cls._found_path.parent.mkdir(parents=True, exist_ok=True)
+                cls().save_to_disk()
         return cls._found_path
     
     @classmethod
-    def load_from_disk(cls: Type[T]) -> Optional[T]:
+    def load_from_disk(cls: Type[T]) -> T:
         """Load configuration from disk.
         
         :return: Configuration instance, or None if not found 
@@ -48,7 +50,7 @@ class BaseConfig(BaseModel, ABC):
         """
         config_data = tomllib.load(cls.get_config_path().open("rb"))
         return cls.model_validate(config_data)
-    
+
     def save_to_disk(self) -> None:
         """Save configuration to disk.
         

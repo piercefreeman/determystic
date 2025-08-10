@@ -93,7 +93,7 @@ async def new_validator_command(path: Path | None):
         sys.exit(1)
     
     if path:
-        ProjectConfigManager.set_runtime_custom_path(path / ".determystic")
+        ProjectConfigManager.set_runtime_custom_path(path)
 
     config_manager = ProjectConfigManager.load_from_disk()
 
@@ -127,7 +127,7 @@ async def new_validator_command(path: Path | None):
         console.print(f"[dim]Formatted validator name: {validator_name}[/dim]")
     
     # Check if validator already exists
-    existing_validators = list(config_manager.validators.values())
+    existing_validators = list(config_manager.validators.values())  # type: ignore
     if any(v.name == validator_name for v in existing_validators):
         if not Prompt.ask(f"\n[yellow]Validator '{validator_name}' already exists. Overwrite?[/yellow]", choices=["y", "n"], default="n") == "y":
             console.print("[red]Operation cancelled.[/red]")
@@ -183,10 +183,10 @@ async def new_validator_command(path: Path | None):
         sys.exit(1)
     
     console.print("\n[bold green]✅ Agent completed successfully![/bold green]")
-    console.print(Panel(final_event.content, title="Final Result", border_style="green"))
+    console.print(Panel(final_event.content, title="Final Result", border_style="green"))  # type: ignore
     
-    validation_contents = final_event.deps.validation_contents
-    test_contents = final_event.deps.test_contents
+    validation_contents = final_event.deps.validation_contents  # type: ignore
+    test_contents = final_event.deps.test_contents  # type: ignore
     
     # Process generated files from agent virtual contents
     if validation_contents or test_contents:
@@ -200,7 +200,7 @@ async def new_validator_command(path: Path | None):
         # Save files to .determystic structure using config manager
         if validation_contents:
             try:
-                validator_file = config_manager.new_validation(
+                validator_file = config_manager.new_validation(  # type: ignore
                     name=validator_name,
                     validator_script=validation_contents,
                     test_script=test_contents or "",
@@ -208,7 +208,7 @@ async def new_validator_command(path: Path | None):
                 )
                 
                 # Save the config to disk
-                config_manager.save_to_disk()
+                config_manager.save_to_disk()  # type: ignore
                 
                 console.print("\n[bold green]✅ Validator saved successfully![/bold green]")
                 console.print(f"  • Validator: {validator_file.validator_path}")

@@ -33,8 +33,11 @@ def configure_command():
     ))
     
     # Load existing settings or create new ones
-    settings = DeterministicSettings.load_from_disk()
-    
+    settings = DeterministicSettings.load_from_disk(required=False)
+
+    if not settings:
+        settings = DeterministicSettings()
+ 
     # Convert existing values to a simple dict
     existing_values = settings.model_dump()
     
