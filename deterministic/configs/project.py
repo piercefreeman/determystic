@@ -80,10 +80,10 @@ class ProjectConfigManager(BaseConfig):
         config_root = self.get_config_path().parent
         
         validator_path = config_root / "validations" / f"{name}.py"
-        validator_path.mkdir(parents=True, exist_ok=True)
+        validator_path.parent.mkdir(parents=True, exist_ok=True)
 
         test_path = config_root / "tests" / f"{name}.py"
-        test_path.mkdir(parents=True, exist_ok=True)
+        test_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Write the validator script to the validator path
         validator_path.write_text(validator_script)
