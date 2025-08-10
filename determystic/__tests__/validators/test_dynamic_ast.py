@@ -149,7 +149,7 @@ validator_path = "validations/test_validator.determystic"
 ''')
         
         # Set the runtime custom path to point to our temp directory
-        ProjectConfigManager.set_runtime_custom_path(temp_project_dir / ".determystic")
+        ProjectConfigManager.set_runtime_custom_path(temp_project_dir)
         # Clear cached path
         ProjectConfigManager._found_path = None
         try:
@@ -184,7 +184,7 @@ validator_path = "validations/test_validator.determystic"
 ''')
         
         # Set the runtime custom path to point to our temp directory
-        ProjectConfigManager.set_runtime_custom_path(temp_project_dir / ".determystic")
+        ProjectConfigManager.set_runtime_custom_path(temp_project_dir)
         # Clear cached path
         ProjectConfigManager._found_path = None
         try:
@@ -211,7 +211,7 @@ validator_path = "validations/missing.determystic"
 ''')
         
         # Set the runtime custom path to point to our temp directory
-        ProjectConfigManager.set_runtime_custom_path(temp_project_dir / ".determystic")
+        ProjectConfigManager.set_runtime_custom_path(temp_project_dir)
         # Clear cached path
         ProjectConfigManager._found_path = None
         try:

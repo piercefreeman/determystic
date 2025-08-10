@@ -95,7 +95,7 @@ async def run_validation(path: Path, verbose: bool):
     ))
     
     if path:
-        ProjectConfigManager.set_runtime_custom_path(path / ".determystic")
+        ProjectConfigManager.set_runtime_custom_path(path)
 
     # Get all validators using the create_validators class method pattern
     validators = []

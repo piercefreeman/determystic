@@ -1,6 +1,5 @@
 """List validators command for showing configured validators in a project."""
 
-import sys
 from pathlib import Path
 
 import click
@@ -9,7 +8,6 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
-from determystic.io import detect_pyproject_path
 from determystic.configs.project import ProjectConfigManager
 
 console = Console()
@@ -19,29 +17,17 @@ console = Console()
 @click.argument("path", type=click.Path(path_type=Path), required=False)
 def list_validators_command(path: Path | None):
     """List all validators in a determystic project."""
-    # Use path detection logic to determine the target path
-    target_path = detect_pyproject_path(path or Path.cwd())
+    # Determine target path
+    if path is not None:
+        ProjectConfigManager.set_runtime_custom_path(path)
     
-    # Ensure the target path exists
-    if not target_path or not target_path.exists():
-        console.print(f"[red]Error: Path '{target_path}' does not exist.[/red]")
-        sys.exit(1)
-    
-    # At this point target_path is guaranteed to exist
-    assert target_path is not None
     # Initialize project config manager
-    config_manager = ProjectConfigManager(target_path)
+    config_manager = ProjectConfigManager.load_from_disk()
+    config_path = ProjectConfigManager.get_config_path().parent
     
-    # Check if project is initialized
-    if not config_manager.exists():  # type: ignore
-        console.print(f"[yellow]No determystic project found at {target_path}[/yellow]")
-        console.print("[dim]Run 'determystic new-validator' to initialize a project.[/dim]")
-        sys.exit(0)
-    
-    # Load validators
-    validators = config_manager.list_validators()  # type: ignore
-    
-    if not validators:
+    # Get validator files from config
+    validator_files = list(config_manager.validators.values())
+    if not validator_files:
         console.print(Panel(
             "[yellow]No validators found in this project.[/yellow]\n"
             "[dim]Run 'determystic new-validator' to create your first validator.[/dim]",
@@ -54,7 +40,7 @@ def list_validators_command(path: Path | None):
     table = Table(
         show_header=True,
         header_style="bold cyan",
-        title=f"Validators in {target_path.name}",
+        title="Validators",
         title_style="bold cyan"
     )
     
@@ -63,10 +49,10 @@ def list_validators_command(path: Path | None):
     table.add_column("Files", width=20)
     table.add_column("Created", style="dim", width=12)
     
-    for validator in validators:
-        # Determine file status
-        validator_file_path = target_path / validator.validator_path
-        test_file_path = target_path / validator.test_path if validator.test_path else None
+    for validator_file in validator_files:
+        # Determine file status - paths are relative to .determystic directory
+        validator_file_path = config_path / validator_file.validator_path
+        test_file_path = config_path / validator_file.test_path if validator_file.test_path else None
         
         files_status = []
         if validator_file_path.exists():
@@ -74,7 +60,7 @@ def list_validators_command(path: Path | None):
         else:
             files_status.append("[red]validator[/red]")
         
-        if validator.test_path:
+        if validator_file.test_path:
             if test_file_path and test_file_path.exists():
                 files_status.append("[green]test[/green]")
             else:
@@ -83,15 +69,15 @@ def list_validators_command(path: Path | None):
         files_text = Text.from_markup(" + ".join(files_status))
         
         # Format creation date
-        created_date = validator.created_at.strftime("%m/%d/%Y")
+        created_date = validator_file.created_at.strftime("%m/%d/%Y")
         
         # Truncate description if too long
-        description = validator.description or "[dim]No description[/dim]"
+        description = validator_file.description or "[dim]No description[/dim]"
         if len(description) > 47:
             description = description[:44] + "..."
         
         table.add_row(
-            validator.name,
+            validator_file.name,
             description,
             files_text,
             created_date
@@ -100,4 +86,4 @@ def list_validators_command(path: Path | None):
     console.print(table)
     
     # Show summary
-    console.print(f"\n[dim]Found {len(validators)} validator(s) in {config_manager.config_dir}[/dim]")  # type: ignore
+    console.print(f"\n[dim]Found {len(validator_files)} validator(s) in {config_path}[/dim]")

@@ -93,7 +93,7 @@ async def new_validator_command(path: Path | None):
         sys.exit(1)
     
     if path:
-        ProjectConfigManager.set_runtime_custom_path(path / ".determystic")
+        ProjectConfigManager.set_runtime_custom_path(path)
 
     config_manager = ProjectConfigManager.load_from_disk()
 

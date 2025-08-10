@@ -4,7 +4,7 @@ import tomllib
 import tomli_w
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import ClassVar, Optional, Type, TypeVar
+from typing import ClassVar, Type, TypeVar
 
 from pydantic import BaseModel
 
@@ -42,7 +42,7 @@ class BaseConfig(BaseModel, ABC):
         return cls._found_path
     
     @classmethod
-    def load_from_disk(cls: Type[T]) -> Optional[T]:
+    def load_from_disk(cls: Type[T]) -> T:
         """Load configuration from disk.
         
         :return: Configuration instance, or None if not found 

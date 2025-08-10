@@ -47,7 +47,7 @@ class ProjectConfigManager(BaseConfig):
 
         """
         path = path.absolute()
-        cls.runtime_custom_path = path
+        cls.runtime_custom_path = path / ".determystic"
 
     @classmethod
     def get_possible_config_paths(cls):

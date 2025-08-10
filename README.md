@@ -58,7 +58,17 @@ Feedback: Don't use Optional - use A | None
 This will add a new .deterministic hidden folder in your current project that you can introspect. But usually the logic looks pretty good zero-shot (we add internal tests to try to ensure that reasonableness of the validator we just wrote) so we can then run the validation:
 
 ```bash
-$ 
+$ uv run determystic validate example_project
+
+Detailed Results:
+
+✗ Custom Validator
+  main.py:6: Use 'T | None' instead of 'Optional[T]' for type hints
+        4 | 
+        5 | class MyModel(BaseModel):
+  >>>   6 |     name: Optional = None
+        7 |     age: int
+        8 |
 ```
 
 ## Background
