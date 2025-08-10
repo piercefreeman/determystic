@@ -7,7 +7,7 @@ from pydantic_ai.messages import FunctionToolCallEvent, FunctionToolResultEvent
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent, RunContext
 
-from deterministic.isolated_env import IsolatedEnv
+from determystic.isolated_env import IsolatedEnv
 
 
 # Prompts
@@ -24,10 +24,10 @@ The validator should:
 
 ## Required AST Traverser Pattern
 
-You MUST create a validator using the AST traverser pattern from `deterministic.external`:
+You MUST create a validator using the AST traverser pattern from `determystic.external`:
 
 ```python
-from deterministic.external import DeterministicTraverser
+from determystic.external import DeterministicTraverser
 
 class YourValidatorTraverser(DeterministicTraverser):
     '''Custom AST traverser for your specific validation.'''
@@ -86,7 +86,7 @@ def process(value: Optional[str]) -> None:  # BAD: Use str | None
 
 1. **Always create an AST traverser class:**
    ```python
-   from deterministic.external import DeterministicTraverser
+   from determystic.external import DeterministicTraverser
    
    class YourValidatorTraverser(DeterministicTraverser):
        # Your validation logic here
@@ -333,12 +333,12 @@ async def read_external_file(
 ) -> str:
     """Read the current external.py file to understand available classes and functions."""
     try:
-        # Read the external.py file from the deterministic package
-        import deterministic.external
+        # Read the external.py file from the determystic package
+        import determystic.external
         import inspect
         
         # Get the path to the external.py file
-        external_file_path = inspect.getfile(deterministic.external)
+        external_file_path = inspect.getfile(determystic.external)
         
         # Read the file content
         with open(external_file_path, 'r', encoding='utf-8') as f:

@@ -6,7 +6,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Prompt
 
-from deterministic.configs.system import DeterministicSettings
+from determystic.configs.system import DeterministicSettings
 
 console = Console()
 
@@ -25,7 +25,7 @@ def _mask_sensitive_value(value: str, field_name: str) -> str:
 
 @click.command()
 def configure_command():
-    """Configure API keys and other settings for the deterministic tool."""
+    """Configure API keys and other settings for the determystic tool."""
     console.print(Panel.fit(
         "[bold cyan]Deterministic Configuration[/bold cyan]\n"
         "Set up your API keys and preferences",
@@ -81,6 +81,6 @@ def configure_command():
             masked_value = _mask_sensitive_value(str(current_value), field_name)
             console.print(f"  • {field_name.replace('_', ' ').title()}: {masked_value}")
     
-    console.print("\n[green]You can now use the deterministic tools![/green]")
-    console.print("[dim]Try: deterministic new-validator[/dim]")
+    console.print("\n[green]You can now use the determystic tools![/green]")
+    console.print("[dim]Try: determystic new-validator[/dim]")
     

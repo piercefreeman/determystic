@@ -5,14 +5,14 @@ from unittest.mock import patch
 import pytest
 from pydantic_ai.models.test import TestModel
 
-from deterministic.agents.create_validator import create_ast_validator, stream_create_validator
+from determystic.agents.create_validator import create_ast_validator, stream_create_validator
 
 
 # Test responses that the mock model will return
 VALIDATOR_CODE = '''"""AST validator for detecting Optional type hints."""
 
 import ast
-from deterministic.external import DeterministicTraverser
+from determystic.external import DeterministicTraverser
 
 
 class OptionalTypeHintTraverser(DeterministicTraverser):
@@ -114,7 +114,7 @@ class TestCreateValidator:
         """Test successful creation of AST validator."""
         
         # Mock the isolated environment run_tests method
-        with patch('deterministic.agents.create_validator.IsolatedEnv') as mock_env:
+        with patch('determystic.agents.create_validator.IsolatedEnv') as mock_env:
             mock_env_instance = mock_env.return_value.__enter__.return_value
             mock_env_instance.run_tests.return_value = (True, "All tests passed")
             
@@ -147,7 +147,7 @@ class TestCreateValidator:
         events = []
         
         # Mock the isolated environment
-        with patch('deterministic.agents.create_validator.IsolatedEnv') as mock_env:
+        with patch('determystic.agents.create_validator.IsolatedEnv') as mock_env:
             mock_env_instance = mock_env.return_value.__enter__.return_value
             mock_env_instance.run_tests.return_value = (True, "All tests passed")
             
@@ -176,7 +176,7 @@ class TestCreateValidator:
     ):
         """Test that agent dependencies are properly managed."""
         
-        with patch('deterministic.agents.create_validator.IsolatedEnv') as mock_env:
+        with patch('determystic.agents.create_validator.IsolatedEnv') as mock_env:
             mock_env_instance = mock_env.return_value.__enter__.return_value
             mock_env_instance.run_tests.return_value = (True, "Tests passed successfully")
             
@@ -202,7 +202,7 @@ class TestCreateValidator:
     @pytest.mark.asyncio
     async def test_real_tool_integration_end_to_end(self):
         """Test that our tools work end-to-end with realistic agent behavior."""
-        from deterministic.agents.create_validator import (
+        from determystic.agents.create_validator import (
             AgentDependencies, 
             write_file, read_file, edit_file, run_tests, finalize
         )
@@ -221,7 +221,7 @@ class TestCreateValidator:
         validator_code = '''"""AST validator for detecting exceptions in test functions."""
 
 import ast
-from deterministic.external import DeterministicTraverser
+from determystic.external import DeterministicTraverser
 
 
 class TestExceptionTraverser(DeterministicTraverser):
@@ -333,7 +333,7 @@ def test_clean_function():
         assert "✅ Replaced 1 occurrence(s)" in edit_result
         
         # Test 5: Test the isolated environment integration (mocked)
-        with patch('deterministic.agents.create_validator.IsolatedEnv') as mock_env:
+        with patch('determystic.agents.create_validator.IsolatedEnv') as mock_env:
             mock_env_instance = mock_env.return_value.__enter__.return_value
             mock_env_instance.run_tests.return_value = (True, "All tests passed")
             

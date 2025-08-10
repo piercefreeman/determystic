@@ -1,5 +1,5 @@
 [project]
-name = "deterministic"
+name = "determystic"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
@@ -19,7 +19,7 @@ dependencies = [
 ]
 
 [project.scripts]
-deterministic = "deterministic.entrypoint:cli"
+determystic = "determystic.entrypoint:cli"
 
 [build-system]
 requires = ["hatchling"]

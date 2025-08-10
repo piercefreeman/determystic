@@ -9,7 +9,7 @@ from unittest.mock import patch
 import pytest
 from pydantic import ValidationError
 
-from deterministic.configs.project import ProjectConfigManager, ValidatorFile
+from determystic.configs.project import ProjectConfigManager, ValidatorFile
 
 
 @pytest.fixture(autouse=True)
@@ -102,11 +102,13 @@ class TestProjectConfigManagerClassMethods:
                 # Verify save_to_disk was called only if path didn't exist
                 if should_create_config:
                     mock_save.assert_called_once()
-                    # Verify it was called with the expected config file path
-                    expected_config_path = path / "config.toml"
-                    mock_save.assert_called_with(expected_config_path)
+                    # save_to_disk is called without arguments
+                    mock_save.assert_called_with()
                 else:
                     mock_save.assert_not_called()
+                
+                # Clean up
+                ProjectConfigManager.runtime_custom_path = None
 
     @pytest.mark.parametrize("runtime_path_set,expected_paths_count", [
         (True, 1),   # With runtime path set, should return 1 path
@@ -126,8 +128,8 @@ class TestProjectConfigManagerClassMethods:
                 ProjectConfigManager.runtime_custom_path = custom_path
             
             # Mock the detect functions to return predictable paths
-            with patch('deterministic.configs.project.detect_git_root') as mock_git, \
-                 patch('deterministic.configs.project.detect_pyproject_path') as mock_pyproject:
+            with patch('determystic.configs.project.detect_git_root') as mock_git, \
+                 patch('determystic.configs.project.detect_pyproject_path') as mock_pyproject:
                 
                 mock_git.return_value = temp_path / "git_root"
                 mock_pyproject.return_value = temp_path / "pyproject_root"
@@ -137,17 +139,21 @@ class TestProjectConfigManagerClassMethods:
                 assert len(paths) == expected_paths_count
                 
                 if runtime_path_set:
-                    assert paths == [custom_path]
+                    assert paths == [custom_path / "config.toml"]
                     # Verify detect functions weren't called when runtime path is set
                     mock_git.assert_not_called()
                     mock_pyproject.assert_not_called()
                 else:
-                    expected_git_path = temp_path / "git_root" / ".deterministic" / "config.toml"
-                    expected_pyproject_path = temp_path / "pyproject_root" / ".deterministic" / "config.toml"
+                    expected_git_path = temp_path / "git_root" / ".determystic" / "config.toml"
+                    expected_pyproject_path = temp_path / "pyproject_root" / ".determystic" / "config.toml"
                     assert paths == [expected_git_path, expected_pyproject_path]
                     # Verify detect functions were called
                     mock_git.assert_called_once()
                     mock_pyproject.assert_called_once()
+                
+                # Clean up
+                if runtime_path_set:
+                    ProjectConfigManager.runtime_custom_path = None
 
 
 class TestProjectConfigManagerInstanceMethods:
@@ -186,15 +192,15 @@ class TestProjectConfigManagerInstanceMethods:
                 
                 # Verify paths are relative to config root
                 config_root = config_file.parent
-                expected_validator_path = f"validations/{name}.py"
-                expected_test_path = f"tests/{name}.py"
+                expected_validator_path = f"validations/{name}.determystic"
+                expected_test_path = f"tests/{name}.determystic"
                 
                 assert validator_file.validator_path == expected_validator_path
                 assert validator_file.test_path == expected_test_path
                 
                 # Verify files were actually created with correct content
-                actual_validator_path = config_root / "validations" / f"{name}.py"
-                actual_test_path = config_root / "tests" / f"{name}.py"
+                actual_validator_path = config_root / "validations" / f"{name}.determystic"
+                actual_test_path = config_root / "tests" / f"{name}.determystic"
                 
                 assert actual_validator_path.exists()
                 assert actual_test_path.exists()

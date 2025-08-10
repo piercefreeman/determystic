@@ -68,22 +68,22 @@ def detect_git_root(start_path: Path) -> Optional[Path]:
         # Not in a git repository or git not available
         return None
 
-def get_deterministic_package_path() -> Optional[Path]:
+def get_determystic_package_path() -> Optional[Path]:
     """
-    Get the path to the deterministic package.
+    Get the path to the determystic package.
     
     Returns:
-        Path to the deterministic package directory, or None if not found
+        Path to the determystic package directory, or None if not found
     """
     try:
-        import deterministic
+        import determystic
         # Get the package's __file__ attribute and traverse up to find the package root
-        package_file = Path(deterministic.__file__)
+        package_file = Path(determystic.__file__)
         # The package root is the parent directory of the __init__.py file
         package_root = package_file.parent.parent
         return package_root
     except (ImportError, AttributeError):
-        raise RuntimeError("Unable to resolve the root of the deterministic package.")
+        raise RuntimeError("Unable to resolve the root of the determystic package.")
 
 def async_to_sync(async_fn: Callable[P, Coroutine[Any, Any, T]]) -> Callable[P, T]:
     @wraps(async_fn)

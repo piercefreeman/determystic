@@ -13,9 +13,9 @@ from rich.spinner import Spinner
 from rich.table import Table
 from rich.text import Text
 
-from deterministic.configs.project import ProjectConfigManager
-from deterministic.io import detect_pyproject_path
-from deterministic.validators import (
+from determystic.configs.project import ProjectConfigManager
+from determystic.io import detect_pyproject_path
+from determystic.validators import (
     DynamicASTValidator,
     StaticAnalysisValidator,
 )
@@ -93,7 +93,7 @@ async def run_validation(path: Path | None, verbose: bool):
     ))
     
     if path:
-        ProjectConfigManager.set_runtime_custom_path(path / ".deterministic")
+        ProjectConfigManager.set_runtime_custom_path(path / ".determystic")
 
     # Get all validators using the create_validators class method pattern
     validators = []

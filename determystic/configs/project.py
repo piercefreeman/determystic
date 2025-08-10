@@ -1,12 +1,12 @@
-"""Project configuration management for deterministic validators."""
+"""Project configuration management for determystic validators."""
 
 from datetime import datetime
 from typing import Any, ClassVar
 from pathlib import Path
 
 from pydantic import BaseModel, Field
-from deterministic.configs.base import BaseConfig
-from deterministic.io import detect_git_root, detect_pyproject_path
+from determystic.configs.base import BaseConfig
+from determystic.io import detect_git_root, detect_pyproject_path
 
 
 class ValidatorFile(BaseModel):
@@ -19,7 +19,7 @@ class ValidatorFile(BaseModel):
 
 
 class ProjectConfigManager(BaseConfig):
-    """Configuration for a deterministic project."""
+    """Configuration for a determystic project."""
     
     version: str = Field(default="1.0", description="Configuration version")
     project_name: str | None = Field(default=None, description="Name of the project")
@@ -63,8 +63,8 @@ class ProjectConfigManager(BaseConfig):
             return [cls.runtime_custom_path / "config.toml"]
 
         return [
-            detect_git_root(Path.cwd()) / ".deterministic" / "config.toml",
-            detect_pyproject_path(Path.cwd()) / ".deterministic" / "config.toml",
+            detect_git_root(Path.cwd()) / ".determystic" / "config.toml",
+            detect_pyproject_path(Path.cwd()) / ".determystic" / "config.toml",
         ]
     
     def new_validation(self, name: str, validator_script: str, test_script: str, description: str | None = None) -> ValidatorFile:
@@ -82,10 +82,10 @@ class ProjectConfigManager(BaseConfig):
         config_root = self.get_config_path().parent
         
         # We don't want to bundle .py files since these get picked up by the static analysis validators
-        validator_path = config_root / "validations" / f"{name}.deterministic"
+        validator_path = config_root / "validations" / f"{name}.determystic"
         validator_path.parent.mkdir(parents=True, exist_ok=True)
 
-        test_path = config_root / "tests" / f"{name}.deterministic"
+        test_path = config_root / "tests" / f"{name}.determystic"
         test_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Write the validator script to the validator path

@@ -152,7 +152,7 @@ def create_issue_with_context(
 
 
 class DeterministicTraverser(ast.NodeVisitor):
-    """Base class for all deterministic AST validators.
+    """Base class for all determystic AST validators.
     
     This class provides a structured way to traverse the AST and collect
     validation errors with proper line numbers and code context.

@@ -9,8 +9,8 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
-from deterministic.io import detect_pyproject_path
-from deterministic.configs.project import ProjectConfigManager
+from determystic.io import detect_pyproject_path
+from determystic.configs.project import ProjectConfigManager
 
 console = Console()
 
@@ -18,7 +18,7 @@ console = Console()
 @click.command()
 @click.argument("path", type=click.Path(path_type=Path), required=False)
 def list_validators_command(path: Path | None):
-    """List all validators in a deterministic project."""
+    """List all validators in a determystic project."""
     # Use path detection logic to determine the target path
     target_path = detect_pyproject_path(path)
     
@@ -32,8 +32,8 @@ def list_validators_command(path: Path | None):
     
     # Check if project is initialized
     if not config_manager.exists():
-        console.print(f"[yellow]No deterministic project found at {target_path}[/yellow]")
-        console.print("[dim]Run 'deterministic new-validator' to initialize a project.[/dim]")
+        console.print(f"[yellow]No determystic project found at {target_path}[/yellow]")
+        console.print("[dim]Run 'determystic new-validator' to initialize a project.[/dim]")
         sys.exit(0)
     
     # Load validators
@@ -42,7 +42,7 @@ def list_validators_command(path: Path | None):
     if not validators:
         console.print(Panel(
             "[yellow]No validators found in this project.[/yellow]\n"
-            "[dim]Run 'deterministic new-validator' to create your first validator.[/dim]",
+            "[dim]Run 'determystic new-validator' to create your first validator.[/dim]",
             title="Validators",
             border_style="yellow"
         ))

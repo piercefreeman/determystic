@@ -1,12 +1,12 @@
-"""Main CLI entry point for the deterministic tool."""
+"""Main CLI entry point for the determystic tool."""
 
 
 import click
 
-from deterministic.cli.validate import validate_command
-from deterministic.cli.new_validator import new_validator_command
-from deterministic.cli.configure import configure_command
-from deterministic.cli.list_validators import list_validators_command
+from determystic.cli.validate import validate_command
+from determystic.cli.new_validator import new_validator_command
+from determystic.cli.configure import configure_command
+from determystic.cli.list_validators import list_validators_command
 
 
 @click.group()

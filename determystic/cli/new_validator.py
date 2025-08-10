@@ -13,10 +13,10 @@ from rich.panel import Panel
 from rich.prompt import Prompt
 from rich.syntax import Syntax
 
-from deterministic.configs.project import ProjectConfigManager
-from deterministic.configs.system import DeterministicSettings
-from deterministic.agents.create_validator import stream_create_validator, StreamEvent
-from deterministic.io import async_to_sync
+from determystic.configs.project import ProjectConfigManager
+from determystic.configs.system import DeterministicSettings
+from determystic.agents.create_validator import stream_create_validator, StreamEvent
+from determystic.io import async_to_sync
 
 console = Console()
 
@@ -93,7 +93,7 @@ async def new_validator_command(path: Path | None):
         sys.exit(1)
     
     if path:
-        ProjectConfigManager.set_runtime_custom_path(path / ".deterministic")
+        ProjectConfigManager.set_runtime_custom_path(path / ".determystic")
 
     config_manager = ProjectConfigManager.load_from_disk()
 
@@ -197,7 +197,7 @@ async def new_validator_command(path: Path | None):
         if test_contents:
             console.print("  • Generated test code")
         
-        # Save files to .deterministic structure using config manager
+        # Save files to .determystic structure using config manager
         if validation_contents:
             try:
                 validator_file = config_manager.new_validation(

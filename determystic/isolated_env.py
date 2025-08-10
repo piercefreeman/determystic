@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Optional
 import shutil
 
-from deterministic.io import get_deterministic_package_path
+from determystic.io import get_determystic_package_path
 
 
 class IsolatedEnv:
@@ -16,14 +16,14 @@ class IsolatedEnv:
         """Initialize the isolated environment.
         
         Args:
-            project_root: Root path of the deterministic project
+            project_root: Root path of the determystic project
         """
-        self.deterministic_package_path = get_deterministic_package_path()
+        self.determystic_package_path = get_determystic_package_path()
         self.temp_dir: Optional[Path] = None
         
     def __enter__(self):
         """Context manager entry - create temp directory."""
-        self.temp_dir = Path(tempfile.mkdtemp(prefix="deterministic_isolated_"))
+        self.temp_dir = Path(tempfile.mkdtemp(prefix="determystic_isolated_"))
         return self
         
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -48,9 +48,9 @@ class IsolatedEnv:
         package_dir = self.temp_dir / "temp_validator"
         package_dir.mkdir(parents=True)
 
-        # Sniff for the path of the deterministic package
+        # Sniff for the path of the determystic package
         
-        # Create pyproject.toml with local deterministic dependency
+        # Create pyproject.toml with local determystic dependency
         pyproject_content = f'''[build-system]
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
@@ -59,7 +59,7 @@ build-backend = "setuptools.build_meta"
 name = "temp-validator"
 version = "0.1.0"
 dependencies = [
-    "deterministic @ file://{self.deterministic_package_path.absolute()}",
+    "determystic @ file://{self.determystic_package_path.absolute()}",
     "pytest>=6.0"
 ]
 

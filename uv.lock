@@ -276,7 +276,7 @@ wheels = [
 ]
 
 [[package]]
-name = "deterministic"
+name = "determystic"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

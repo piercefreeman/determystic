@@ -10,7 +10,7 @@ from unittest.mock import patch
 import pytest
 from pydantic import ValidationError
 
-from deterministic.configs.base import BaseConfig
+from determystic.configs.base import BaseConfig
 
 
 @pytest.fixture(autouse=True)

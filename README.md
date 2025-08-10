@@ -36,7 +36,8 @@ When you see your LLMs outputting something that you know you never want in prac
 uv run ...
 ```
 
-## Limitations
+## Random notes
 
 - Targeting just Python for now. Other languages can follow the same convention pretty closely, but we need to support AST validating for their syntax & test whether LLMs will output better AST validators when written in the same language or if we can use Python as a bridge for control logic
 - Using Anthropic's Claude to do the authoring of the AST validators and the testing files (although in theory it would be very easy to swap this out for any other coding model)
+- We use .deterministic file extensions for our validation and validation test files. These are just python files but we prefer a different extension so they're not inadvertantly picked up by static analysis tools that just sniff for any .py extension. We might reconsider this in the future.

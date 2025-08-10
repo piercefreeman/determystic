@@ -1,4 +1,4 @@
-"""Base configuration management for the deterministic tool."""
+"""Base configuration management for the determystic tool."""
 
 import tomllib
 import tomli_w

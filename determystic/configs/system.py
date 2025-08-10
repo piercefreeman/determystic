@@ -1,16 +1,16 @@
-"""Configuration management for the deterministic tool."""
+"""Configuration management for the determystic tool."""
 
 import sys
 from pathlib import Path
 
 from pydantic import Field
 from pydantic_settings import SettingsConfigDict
-from deterministic.logging import CONSOLE
+from determystic.logging import CONSOLE
 from rich.panel import Panel
-from deterministic.configs.base import BaseConfig
+from determystic.configs.base import BaseConfig
 
 class DeterministicSettings(BaseConfig):
-    """Settings for the deterministic tool."""
+    """Settings for the determystic tool."""
     
     anthropic_api_key: str | None = Field(
         default=None,
@@ -31,7 +31,7 @@ class DeterministicSettings(BaseConfig):
     @classmethod
     def get_possible_config_paths(cls) -> list[Path]:
         """Get the configuration file paths."""
-        config_dir = Path.home() / ".deterministic"
+        config_dir = Path.home() / ".determystic"
         config_dir.mkdir(exist_ok=True)
         return [config_dir / "config.toml"]
 
@@ -44,7 +44,7 @@ class DeterministicSettings(BaseConfig):
                 "[bold red]Configuration Required[/bold red]\n\n"
                 "This tool requires an Anthropic API key to function.\n"
                 "Please run the configuration wizard:\n\n"
-                "[bold cyan]deterministic configure[/bold cyan]",
+                "[bold cyan]determystic configure[/bold cyan]",
                 border_style="red"
             ))
             sys.exit(1)

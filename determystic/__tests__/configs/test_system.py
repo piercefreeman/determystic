@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 import pytest
 
-from deterministic.configs.system import DeterministicSettings
+from determystic.configs.system import DeterministicSettings
 
 
 @pytest.fixture(autouse=True)
@@ -28,11 +28,11 @@ class TestDeterministicSettingsClassMethods:
             temp_path = Path(temp_dir)
             
             # Mock Path.home() to return our temp directory
-            with patch('deterministic.configs.system.Path.home', return_value=temp_path):
+            with patch('determystic.configs.system.Path.home', return_value=temp_path):
                 paths = DeterministicSettings.get_possible_config_paths()
                 
                 # Verify the directory was created
-                config_dir = temp_path / ".deterministic"
+                config_dir = temp_path / ".determystic"
                 assert config_dir.exists()
                 assert config_dir.is_dir()
                 
@@ -44,11 +44,11 @@ class TestDeterministicSettingsClassMethods:
         """Test get_possible_config_paths when directory already exists."""
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
-            config_dir = temp_path / ".deterministic"
+            config_dir = temp_path / ".determystic"
             config_dir.mkdir()  # Pre-create the directory
             
             # Mock Path.home() to return our temp directory
-            with patch('deterministic.configs.system.Path.home', return_value=temp_path):
+            with patch('determystic.configs.system.Path.home', return_value=temp_path):
                 paths = DeterministicSettings.get_possible_config_paths()
                 
                 # Verify the directory still exists and path is correct
@@ -99,9 +99,9 @@ class TestDeterministicSettingsClassMethods:
             mock_parent_load.side_effect = exception_type(exception_message)
             
             # Mock sys.exit to prevent actual exit during test
-            with patch('deterministic.configs.system.sys.exit') as mock_exit:
+            with patch('determystic.configs.system.sys.exit') as mock_exit:
                 # Mock CONSOLE.print to prevent actual output during test
-                with patch('deterministic.configs.system.CONSOLE.print') as mock_print:
+                with patch('determystic.configs.system.CONSOLE.print') as mock_print:
                     DeterministicSettings.load_from_disk()
                     
                     # Verify sys.exit was called with code 1
@@ -116,7 +116,7 @@ class TestDeterministicSettingsClassMethods:
                     panel_content = str(call_args.renderable)
                     assert "Configuration Required" in panel_content
                     assert "Anthropic API key" in panel_content
-                    assert "deterministic configure" in panel_content
+                    assert "determystic configure" in panel_content
 
     def test_load_from_disk_prints_helpful_error_message(self) -> None:
         """Test that load_from_disk prints a helpful error message on failure."""
@@ -125,9 +125,9 @@ class TestDeterministicSettingsClassMethods:
             mock_parent_load.side_effect = FileNotFoundError("Config not found")
             
             # Mock sys.exit to prevent actual exit during test
-            with patch('deterministic.configs.system.sys.exit'):
+            with patch('determystic.configs.system.sys.exit'):
                 # Mock CONSOLE.print to capture the output
-                with patch('deterministic.configs.system.CONSOLE.print') as mock_print:
+                with patch('determystic.configs.system.CONSOLE.print') as mock_print:
                     DeterministicSettings.load_from_disk()
                     
                     # Verify the error message was printed
@@ -144,7 +144,7 @@ class TestDeterministicSettingsClassMethods:
                     panel_content = str(panel_arg.renderable)
                     assert "Configuration Required" in panel_content
                     assert "Anthropic API key" in panel_content
-                    assert "deterministic configure" in panel_content
+                    assert "determystic configure" in panel_content
                     
                     # Check the panel style
                     assert panel_arg.border_style == "red"
@@ -227,11 +227,11 @@ class TestDeterministicSettingsIntegration:
             temp_path = Path(temp_dir)
             
             # Mock Path.home() to return our temp directory
-            with patch('deterministic.configs.system.Path.home', return_value=temp_path):
+            with patch('determystic.configs.system.Path.home', return_value=temp_path):
                 # This should create the directory
                 paths = DeterministicSettings.get_possible_config_paths()
                 
-                config_dir = temp_path / ".deterministic"
+                config_dir = temp_path / ".determystic"
                 config_file = config_dir / "config.toml"
                 
                 # Directory should exist
@@ -267,9 +267,9 @@ class TestDeterministicSettingsIntegration:
             
             with patch.object(DeterministicSettings, 'get_possible_config_paths', return_value=[config_file]):
                 # Mock sys.exit to prevent actual exit during test
-                with patch('deterministic.configs.system.sys.exit') as mock_exit:
+                with patch('determystic.configs.system.sys.exit') as mock_exit:
                     # Mock CONSOLE.print to prevent actual output during test
-                    with patch('deterministic.configs.system.CONSOLE.print'):
+                    with patch('determystic.configs.system.CONSOLE.print'):
                         DeterministicSettings.load_from_disk()
                         
                         # Should exit due to the error

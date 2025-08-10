@@ -5,8 +5,8 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch, MagicMock
 import pytest
 
-from deterministic.validators.static_analysis import StaticAnalysisValidator
-from deterministic.validators.base import ValidationResult
+from determystic.validators.static_analysis import StaticAnalysisValidator
+from determystic.validators.base import ValidationResult
 
 
 class TestStaticAnalysisValidator:
