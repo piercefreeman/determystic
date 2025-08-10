@@ -1,8 +1,15 @@
 """IO utilities for path detection and project root discovery."""
 
+import asyncio
 import subprocess
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Callable, Coroutine, Any, TypeVar, ParamSpec
+from functools import wraps
+
+
+T = TypeVar("T")
+P = ParamSpec("P")
+
 
 
 def detect_pyproject_path(start_path: Path) -> Optional[Path]:
@@ -60,3 +67,29 @@ def detect_git_root(start_path: Path) -> Optional[Path]:
     except (subprocess.CalledProcessError, FileNotFoundError):
         # Not in a git repository or git not available
         return None
+
+def get_deterministic_package_path() -> Optional[Path]:
+    """
+    Get the path to the deterministic package.
+    
+    Returns:
+        Path to the deterministic package directory, or None if not found
+    """
+    try:
+        import deterministic
+        # Get the package's __file__ attribute and traverse up to find the package root
+        package_file = Path(deterministic.__file__)
+        # The package root is the parent directory of the __init__.py file
+        package_root = package_file.parent.parent
+        return package_root
+    except (ImportError, AttributeError):
+        raise RuntimeError("Unable to resolve the root of the deterministic package.")
+
+def async_to_sync(async_fn: Callable[P, Coroutine[Any, Any, T]]) -> Callable[P, T]:
+    @wraps(async_fn)
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
+        loop = asyncio.get_event_loop()
+        result = loop.run_until_complete(async_fn(*args, **kwargs))
+        return result
+
+    return wrapper

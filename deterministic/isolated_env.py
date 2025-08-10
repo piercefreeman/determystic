@@ -6,17 +6,19 @@ from pathlib import Path
 from typing import Optional
 import shutil
 
+from deterministic.io import get_deterministic_package_path
+
 
 class IsolatedEnv:
     """Runner for executing agent-generated tests in an isolated temporary environment."""
     
-    def __init__(self, project_root: Path):
+    def __init__(self):
         """Initialize the isolated environment.
         
         Args:
             project_root: Root path of the deterministic project
         """
-        self.project_root = project_root
+        self.deterministic_package_path = get_deterministic_package_path()
         self.temp_dir: Optional[Path] = None
         
     def __enter__(self):
@@ -45,6 +47,8 @@ class IsolatedEnv:
         # Create package structure
         package_dir = self.temp_dir / "temp_validator"
         package_dir.mkdir(parents=True)
+
+        # Sniff for the path of the deterministic package
         
         # Create pyproject.toml with local deterministic dependency
         pyproject_content = f'''[build-system]

@@ -1,13 +1,8 @@
 """Tests for the create_validator agent."""
 
-import asyncio
-import json
-from pathlib import Path
-from unittest.mock import AsyncMock, patch
-from typing import Any, Dict, List, Optional
+from unittest.mock import patch
 
 import pytest
-from pydantic_ai import Agent
 from pydantic_ai.models.test import TestModel
 
 from deterministic.agents.create_validator import create_ast_validator, stream_create_validator

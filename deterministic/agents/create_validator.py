@@ -1,8 +1,6 @@
 """Pydantic AI agent for creating and testing AST validators."""
 
-from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Optional, AsyncGenerator, Callable
+from typing import Optional, AsyncGenerator
 from pydantic_ai.messages import PartDeltaEvent, TextPartDelta
 from pydantic_ai.messages import FunctionToolCallEvent, FunctionToolResultEvent
 
@@ -113,8 +111,11 @@ def process(value: Optional[str]) -> None:  # BAD: Use str | None
 
 ## Tool Usage Instructions
 
-- Use `write_validator` to create the AST validator code
-- Use `write_tests` to create comprehensive test cases
+- Use `write_validator` to create the AST validator code (legacy - use write_file instead)
+- Use `write_tests` to create comprehensive test cases (legacy - use write_file instead)
+- Use `write_file` to write any file with a specified filename
+- Use `read_file` to read the contents of any file
+- Use `edit_file` to edit specific parts of a file
 - Use `run_tests` to execute tests and verify they work correctly
 - Use `finalize` when the implementation is complete and all tests pass
 
@@ -149,13 +150,39 @@ Please:
 5. Finalize the implementation once all tests pass
 """
 
+# Dependencies
+class AgentDependencies(BaseModel):
+    """Dependencies and state for the agent."""
+    files: dict[str, str] = Field(default_factory=dict, description="Map of filenames to their contents")
+    
+    # Legacy support - these now proxy to the files dict
+    @property
+    def test_contents(self) -> str:
+        """Legacy property for test contents."""
+        return self.files.get("test_validator.py", "")
+    
+    @test_contents.setter
+    def test_contents(self, value: str) -> None:
+        """Legacy setter for test contents."""
+        self.files["test_validator.py"] = value
+    
+    @property
+    def validation_contents(self) -> str:
+        """Legacy property for validation contents."""
+        return self.files.get("validator.py", "")
+    
+    @validation_contents.setter
+    def validation_contents(self, value: str) -> None:
+        """Legacy setter for validation contents."""
+        self.files["validator.py"] = value
+
 
 # Models
 class StreamEvent(BaseModel):
     """Event emitted during streaming execution."""
     event_type: str = Field(description="Type of event (user_prompt, model_request_start, text_chunk, tool_call_start, tool_call_end, final_result)")
     content: str = Field(description="Content of the event")
-    metadata: dict = Field(default_factory=dict, description="Additional metadata")
+    deps: AgentDependencies
 
 
 class WriteValidatorInput(BaseModel):
@@ -168,6 +195,25 @@ class WriteTestsInput(BaseModel):
     content: str = Field(description="The test Python code content")
 
 
+class WriteFileInput(BaseModel):
+    """Input for writing a generic file."""
+    filename: str = Field(description="The name of the file to write")
+    content: str = Field(description="The file content")
+
+
+class ReadFileInput(BaseModel):
+    """Input for reading a file."""
+    filename: str = Field(description="The name of the file to read")
+
+
+class EditFileInput(BaseModel):
+    """Input for editing a file."""
+    filename: str = Field(description="The name of the file to edit")
+    old_str: str = Field(description="The old string to replace")
+    new_str: str = Field(description="The new string to replace with")
+    target_all: bool = Field(default=False, description="If True, replace all occurrences. If False, will error if multiple or zero matches")
+
+
 class RunTestsInput(BaseModel):
     """Input for running tests."""
     message: str = Field(default="Running tests", description="Optional message about test execution")
@@ -178,18 +224,12 @@ class FinalizeInput(BaseModel):
     message: str = Field(description="Summary of what was accomplished")
 
 
-# Dependencies
-@dataclass
-class AgentDependencies:
-    """Dependencies and state for the agent."""
-    project_root: Path
-    test_contents: str = field(default="")
-    validation_contents: str = field(default="")
 
 
 # Agent
 agent = Agent(
     deps_type=AgentDependencies,
+    system_prompt=SYSTEM_PROMPT,
 )
 
 
@@ -227,7 +267,7 @@ async def run_tests(
         return "❌ No test code available. Please write tests first."
     
     # Use isolated environment to run tests
-    with IsolatedEnv(ctx.deps.project_root) as env:
+    with IsolatedEnv() as env:
         success, output = env.run_tests(
             validator_code=ctx.deps.validation_contents,
             test_code=ctx.deps.test_contents
@@ -240,6 +280,65 @@ async def run_tests(
 
 
 @agent.tool
+async def write_file(
+    ctx: RunContext[AgentDependencies], 
+    input: WriteFileInput
+) -> str:
+    """Write content to a file with the specified filename."""
+    # Validate filename and set appropriate content
+    if input.filename in ["validator.py", "test_validator.py"]:
+        ctx.deps.files[input.filename] = input.content
+        return f"✅ File '{input.filename}' written ({len(input.content)} characters)"
+    else:
+        return f"❌ Invalid filename '{input.filename}'. Expected 'validator.py' or 'test_validator.py'"
+
+
+@agent.tool
+async def read_file(
+    ctx: RunContext[AgentDependencies], 
+    input: ReadFileInput
+) -> str:
+    """Read the contents of a file."""
+    if input.filename not in ctx.deps.files:
+        return f"❌ File '{input.filename}' not found. Available files: {list(ctx.deps.files.keys())}"
+    
+    content = ctx.deps.files[input.filename]
+    return f"📄 Contents of '{input.filename}' ({len(content)} characters):\n\n{content}"
+
+
+@agent.tool
+async def edit_file(
+    ctx: RunContext[AgentDependencies], 
+    input: EditFileInput
+) -> str:
+    """Edit a file by replacing old_str with new_str."""
+    if input.filename not in ctx.deps.files:
+        return f"❌ File '{input.filename}' not found. Available files: {list(ctx.deps.files.keys())}"
+    
+    content = ctx.deps.files[input.filename]
+    
+    # Count occurrences of old_str
+    count = content.count(input.old_str)
+    
+    if count == 0:
+        return f"❌ String not found in '{input.filename}': '{input.old_str[:50]}...'"
+    elif count > 1 and not input.target_all:
+        return f"❌ Multiple occurrences ({count}) found in '{input.filename}'. Use target_all=True to replace all, or provide a more specific old_str."
+    
+    # Perform replacement
+    if input.target_all:
+        new_content = content.replace(input.old_str, input.new_str)
+        replacements = count
+    else:
+        new_content = content.replace(input.old_str, input.new_str, 1)
+        replacements = 1
+    
+    ctx.deps.files[input.filename] = new_content
+    
+    return f"✅ Replaced {replacements} occurrence(s) in '{input.filename}'"
+
+
+@agent.tool
 async def finalize(
     ctx: RunContext[AgentDependencies], 
     input: FinalizeInput
@@ -248,7 +347,9 @@ async def finalize(
     validator_size = len(ctx.deps.validation_contents)
     test_size = len(ctx.deps.test_contents)
     
-    return f"🎉 Implementation complete! {input.message}\n\nFiles created:\n- Validator: {validator_size} characters\n- Tests: {test_size} characters"
+    files_summary = "\n".join([f"- {filename}: {len(content)} characters" for filename, content in ctx.deps.files.items()])
+    
+    return f"🎉 Implementation complete! {input.message}\n\nFiles created:\n{files_summary}\n\nLegacy compatibility:\n- Validator: {validator_size} characters\n- Tests: {test_size} characters"
 
 
 # Streaming function
@@ -256,26 +357,11 @@ async def stream_create_validator(
     user_code: str,
     requirements: Optional[str],
     anthropic_client,
-    project_root: Path,
-    callback: Optional[Callable[[StreamEvent], None]] = None
 ) -> AsyncGenerator[StreamEvent, None]:
     """Stream the validator creation process."""
     
     # Create dependencies
-    deps = AgentDependencies(project_root=project_root)
-    
-    # Create agent with provided client
-    stream_agent = Agent(
-        model=anthropic_client,
-        system_prompt=SYSTEM_PROMPT,
-        deps_type=AgentDependencies,
-    )
-    
-    # Register tools
-    stream_agent.tool(write_validator)
-    stream_agent.tool(write_tests)
-    stream_agent.tool(run_tests)
-    stream_agent.tool(finalize)
+    deps = AgentDependencies()
     
     # Format the prompt
     prompt = TASK_PROMPT_TEMPLATE.format(
@@ -284,28 +370,24 @@ async def stream_create_validator(
     )
     
     # Use agent.iter() for streaming with graph introspection
-    async with stream_agent.iter(prompt, deps=deps) as agent_run:
+    async with agent.iter(prompt, model=anthropic_client, deps=deps) as agent_run:
         async for node in agent_run:
-            if stream_agent.is_user_prompt_node(node):
+            if agent.is_user_prompt_node(node):
                 # User prompt started
                 event = StreamEvent(
                     event_type='user_prompt',
                     content=f"Processing user request: {node.user_prompt}",
-                    metadata={'step': 'user_prompt'}
+                    deps=deps
                 )
-                if callback:
-                    await callback(event)
                 yield event
                 
-            elif stream_agent.is_model_request_node(node):
+            elif agent.is_model_request_node(node):
                 # Model request - stream the text response
                 event = StreamEvent(
                     event_type='model_request_start',
                     content="🤖 Agent is thinking...",
-                    metadata={'step': 'model_request'}
+                    deps=deps
                 )
-                if callback:
-                    await callback(event)
                 yield event
                 
                 # Stream the model response text
@@ -317,21 +399,17 @@ async def stream_create_validator(
                                     event = StreamEvent(
                                         event_type='text_chunk',
                                         content=stream_event.delta.content_delta,
-                                        metadata={'step': 'streaming_text', 'part_index': stream_event.index}
+                                        deps=deps
                                     )
-                                    if callback:
-                                        await callback(event)
                                     yield event
                                 
-            elif stream_agent.is_call_tools_node(node):
+            elif agent.is_call_tools_node(node):
                 # Tool calls - show what tools are being called
                 event = StreamEvent(
                     event_type='tool_processing_start',
                     content="🔧 Using tools to create and test files...",
-                    metadata={'step': 'tool_processing'}
+                    deps=deps
                 )
-                if callback:
-                    await callback(event)
                 yield event
                 
                 # Stream tool calls and results
@@ -345,14 +423,8 @@ async def stream_create_validator(
                             event = StreamEvent(
                                 event_type='tool_call_start',
                                 content=f"🔧 Starting {tool_name}",
-                                metadata={
-                                    'step': 'tool_call_start',
-                                    'tool_name': tool_name,
-                                    'tool_args': tool_args
-                                }
+                                deps=deps
                             )
-                            if callback:
-                                await callback(event)
                             yield event
                             
                         elif isinstance(stream_event, FunctionToolResultEvent):
@@ -360,31 +432,19 @@ async def stream_create_validator(
                             event = StreamEvent(
                                 event_type='tool_call_end',
                                 content=f"✅ Tool completed: {stream_event.result.content[:100]}...",
-                                metadata={
-                                    'step': 'tool_call_end',
-                                    'tool_call_id': getattr(stream_event, 'tool_call_id', None),
-                                    'result': stream_event.result.content
-                                }
+                                deps=deps
                             )
-                            if callback:
-                                await callback(event)
                             yield event
                             
-            elif stream_agent.is_end_node(node):
+            elif agent.is_end_node(node):
                 # Final result - include file contents
                 event = StreamEvent(
                     event_type='final_result',
                     content=f"✅ Complete! {node.data.output}",
-                    metadata={
-                        'step': 'final_result', 
-                        'output': node.data.output,
-                        'validation_contents': deps.validation_contents,
-                        'test_contents': deps.test_contents
-                    }
+                    deps=deps
                 )
-                if callback:
-                    await callback(event)
                 yield event
+                break
 
 
 # Non-streaming function
@@ -392,7 +452,6 @@ async def create_ast_validator(
     user_code: str,
     requirements: Optional[str],
     anthropic_client,
-    project_root: Path
 ) -> tuple[str, str, str]:
     """Create an AST validator with comprehensive tests.
     
@@ -400,12 +459,11 @@ async def create_ast_validator(
         user_code: The code provided by the user to test
         requirements: Additional requirements for the validator
         anthropic_client: Configured Anthropic client instance
-        project_root: Root path of the deterministic project
         
     Returns:
         Tuple of (summary, validation_contents, test_contents)
     """
-    deps = AgentDependencies(project_root=project_root)
+    deps = AgentDependencies()
     
     # Create agent with provided client
     run_agent = Agent(
@@ -417,6 +475,9 @@ async def create_ast_validator(
     # Register tools
     run_agent.tool(write_validator)
     run_agent.tool(write_tests)
+    run_agent.tool(write_file)
+    run_agent.tool(read_file)
+    run_agent.tool(edit_file)
     run_agent.tool(run_tests)
     run_agent.tool(finalize)
     

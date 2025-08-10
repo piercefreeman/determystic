@@ -56,19 +56,13 @@ class BaseConfig(BaseModel, ABC):
 
         """
         # Get the config path, but handle the case where we're creating it for the first time
-        possible_paths = self.__class__.get_possible_config_paths()
-        
-        # If we have a cached found path, use it; otherwise use the first possible path
-        if self.__class__._found_path is not None:
-            current_config = self.__class__._found_path
-        else:
-            current_config = possible_paths[0]
-            # Cache this path for future use
-            self.__class__._found_path = current_config
-        
-        # Ensure the parent directory exists
-        current_config.parent.mkdir(parents=True, exist_ok=True)
-        
-        with current_config.open("wb") as f:
-            tomli_w.dump(self.model_dump(mode="json"), f)
+        try:
+            config_path = self.__class__.get_config_path()
+        except FileNotFoundError:
+            # Take the first possible path
+            config_path = self.__class__.get_possible_config_paths()[0]
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+     
+        with config_path.open("wb") as f:
+            tomli_w.dump(self.model_dump(mode="json", exclude_none=True), f)
     

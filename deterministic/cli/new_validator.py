@@ -1,9 +1,12 @@
 """AST validator creation command."""
 
 import asyncio
-import os
 import sys
 from pathlib import Path
+import re
+from random import randint
+from pydantic_ai.models.anthropic import AnthropicModel
+from pydantic_ai.providers.anthropic import AnthropicProvider
 
 import click
 from rich.console import Console
@@ -11,10 +14,10 @@ from rich.panel import Panel
 from rich.prompt import Prompt
 from rich.syntax import Syntax
 
-from deterministic.io import detect_pyproject_path
 from deterministic.configs.project import ProjectConfigManager
 from deterministic.configs.system import DeterministicSettings
-from deterministic.agents.create_validator import stream_create_validator
+from deterministic.agents.create_validator import stream_create_validator, StreamEvent
+from deterministic.io import async_to_sync
 
 console = Console()
 
@@ -64,10 +67,27 @@ def get_multiline_input(prompt_text: str) -> str:
     
     return "\n".join(lines).strip()
 
+def format_validator_name(raw_validator_name: str) -> str:
+    """
+    Auto-format the name to be valid (replace spaces with hyphens, keep only valid chars)
+    """
+    # Replace spaces with hyphens, keep only letters, numbers, hyphens, and underscores
+    validator_name = re.sub(r'[^a-zA-Z0-9_-]', '-', raw_validator_name.strip())
+    # Replace multiple consecutive hyphens with single hyphen
+    validator_name = re.sub(r'-+', '-', validator_name)
+    # Remove leading/trailing hyphens
+    validator_name = validator_name.strip('-')
+    
+    # Ensure the name is not empty after formatting
+    if not validator_name:
+        validator_name = f"custom_validator_{randint(1000, 9999)}"
+
+    return validator_name
 
 @click.command()
 @click.argument("path", type=click.Path(path_type=Path), required=False)
-def new_validator_command(path: Path | None):
+@async_to_sync
+async def new_validator_command(path: Path | None):
     """Run the interactive validator creation workflow."""
     # Check configuration first
     if not check_configuration():
@@ -99,12 +119,13 @@ def new_validator_command(path: Path | None):
     # Get validator name
     console.print("\n[bold]Step 3: Name your validator[/bold]")
     console.print("[dim]Choose a descriptive name for this validator (e.g., 'unused_variable_detector')[/dim]")
-    validator_name = Prompt.ask("\nValidator name", default="custom_validator")
+    raw_validator_name = Prompt.ask("\nValidator name", default="custom_validator")
     
-    # Validate the name (basic validation)
-    if not validator_name.replace("_", "").replace("-", "").isalnum():
-        console.print("[red]Error: Validator name must contain only letters, numbers, hyphens, and underscores.[/red]")
-        sys.exit(1)
+    validator_name = format_validator_name(raw_validator_name)
+    
+    # Show the formatted name if it changed
+    if validator_name != raw_validator_name:
+        console.print(f"[dim]Formatted validator name: {validator_name}[/dim]")
     
     # Check if validator already exists
     existing_validators = list(config_manager.validators.values())
@@ -127,118 +148,84 @@ def new_validator_command(path: Path | None):
     console.print("\n[bold cyan]🤖 Starting AST Validator Agent...[/bold cyan]")
     console.print("[dim]This may take a few moments as the agent creates and tests the validator.[/dim]\n")
     
-    try:
-        # Get system settings and create Anthropic client
-        settings = get_settings()
+    # Get system settings and create Anthropic client
+    settings = get_settings()
+    
+    # Import Anthropic model
+    anthropic_provider = AnthropicProvider(api_key=settings.anthropic_api_key)
+    anthropic_client = AnthropicModel("claude-sonnet-4-20250514", provider=anthropic_provider)
+    
+    # Save current working directory
+    final_event: StreamEvent | None = None
+    async for event in stream_create_validator(
+        user_code=code_snippet,
+        requirements=issue_description,
+        anthropic_client=anthropic_client,
+    ):
+        if event.event_type == 'user_prompt':
+            console.print(f"[bold blue]📝 {event.content}[/bold blue]")
+        elif event.event_type == 'model_request_start':
+            console.print(f"[bold yellow]{event.content}[/bold yellow]")
+        elif event.event_type == 'text_chunk':
+            # Print text chunks as they arrive
+            console.print(event.content, end="", style="white")
+        elif event.event_type == 'tool_processing_start':
+            console.print(f"\n[bold cyan]{event.content}[/bold cyan]")
+        elif event.event_type == 'tool_call_start':
+            console.print(f"[cyan]🔧 Calling {event.content}[/cyan]")
+        elif event.event_type == 'tool_call_end':
+            console.print(f"[green]{event.content}[/green]")
+        elif event.event_type == 'final_result':
+            console.print(f"\n[bold green]{event.content}[/bold green]")
+            final_event = event
+
+    if not final_event:
+        console.print("\n[red]Error: No final event received from the agent.[/red]")
+        sys.exit(1)
+    
+    console.print("\n[bold green]✅ Agent completed successfully![/bold green]")
+    console.print(Panel(final_event.content, title="Final Result", border_style="green"))
+    
+    validation_contents = final_event.deps.validation_contents
+    test_contents = final_event.deps.test_contents
+    
+    # Process generated files from agent virtual contents
+    if validation_contents or test_contents:
+        console.print("\n[bold]Processing generated files...[/bold]")
         
-        # Import Anthropic model
-        from pydantic_ai.models.anthropic import AnthropicModel
-        anthropic_client = AnthropicModel("claude-sonnet-4-20250514")
+        if validation_contents:
+            console.print("  • Generated validator code")
+        if test_contents:
+            console.print("  • Generated test code")
         
-        # Set API key for the client
-        if settings.anthropic_api_key:
-            os.environ["ANTHROPIC_API_KEY"] = settings.anthropic_api_key
-        
-        final_result = None
-        validation_contents = ""
-        test_contents = ""
-        
-        async def stream_callback(event):
-            """Handle streaming events from the agent."""
-            if event.event_type == 'user_prompt':
-                console.print(f"[bold blue]📝 {event.content}[/bold blue]")
-            elif event.event_type == 'model_request_start':
-                console.print(f"[bold yellow]{event.content}[/bold yellow]")
-            elif event.event_type == 'text_chunk':
-                # Print text chunks as they arrive
-                console.print(event.content, end="", style="white")
-            elif event.event_type == 'tool_processing_start':
-                console.print(f"\n[bold cyan]{event.content}[/bold cyan]")
-            elif event.event_type == 'tool_call_start':
-                tool_name = event.metadata.get('tool_name', 'unknown')
-                console.print(f"[cyan]🔧 Calling {tool_name}[/cyan]")
-            elif event.event_type == 'tool_call_end':
-                console.print(f"[green]{event.content}[/green]")
-            elif event.event_type == 'final_result':
-                nonlocal final_result, validation_contents, test_contents
-                final_result = event.metadata.get('output', event.content)
-                validation_contents = event.metadata.get('validation_contents', '')
-                test_contents = event.metadata.get('test_contents', '')
-                console.print(f"\n[bold green]{event.content}[/bold green]")
-        
-        # Run the streaming agent in the target directory
-        async def run_streaming_agent():
-            # Save current working directory
-            original_cwd = Path.cwd()
+        # Save files to .deterministic structure using config manager
+        if validation_contents:
             try:
-                # Change to target directory for agent execution
-                os.chdir(target_path)
+                validator_file = config_manager.new_validation(
+                    name=validator_name,
+                    validator_script=validation_contents,
+                    test_script=test_contents or "",
+                    description=issue_description
+                )
                 
-                async for event in stream_create_validator(
-                    user_code=code_snippet,
-                    requirements=issue_description,
-                    anthropic_client=anthropic_client,
-                    project_root=target_path,
-                    callback=stream_callback
-                ):
-                    # Events are handled by the callback
-                    pass
-                return final_result
-            finally:
-                # Restore original working directory
-                os.chdir(original_cwd)
-        
-        result = asyncio.run(run_streaming_agent())
-        
-        console.print("\n[bold green]✅ Agent completed successfully![/bold green]")
-        if result:
-            console.print(Panel(result, title="Final Result", border_style="green"))
-        
-        # Process generated files from agent virtual contents
-        if validation_contents or test_contents:
-            console.print("\n[bold]Processing generated files...[/bold]")
-            
-            if validation_contents:
-                console.print("  • Generated validator code")
-            if test_contents:
-                console.print("  • Generated test code")
-            
-            # Save files to .deterministic structure using config manager
-            if validation_contents:
-                try:
-                    validator_file = config_manager.new_validation(
-                        name=validator_name,
-                        validator_script=validation_contents,
-                        test_script=test_contents or "",
-                        description=issue_description
-                    )
-                    
-                    # Save the config to disk
-                    config_manager.save_to_disk()
-                    
-                    console.print("\n[bold green]✅ Validator saved successfully![/bold green]")
-                    console.print(f"  • Validator: {validator_file.validator_path}")
-                    if validator_file.test_path:
-                        console.print(f"  • Test: {validator_file.test_path}")
-                    
-                    # Show preview of the validator
-                    lines = validation_contents.split("\n")[:10]
-                    preview = "\n".join(lines)
-                    if len(validation_contents.split("\n")) > 10:
-                        preview += "\n..."
-                    
-                    syntax = Syntax(preview, "python", theme="monokai", line_numbers=False)
-                    console.print(Panel(syntax, title=f"Preview: {validator_name}", border_style="green"))
-                    
-                except Exception as e:
-                    console.print(f"[red]Error saving validator files: {e}[/red]")
-        else:
-            console.print("\n[yellow]Warning: No files were generated by the agent.[/yellow]")
-        
-    except KeyboardInterrupt:
-        console.print("\n[yellow]Operation interrupted by user.[/yellow]")
-        sys.exit(1)
-    except Exception as e:
-        console.print(f"\n[red]Error: {e}[/red]")
-        console.print("[dim]Please check your configuration and try again.[/dim]")
-        sys.exit(1)
+                # Save the config to disk
+                config_manager.save_to_disk()
+                
+                console.print("\n[bold green]✅ Validator saved successfully![/bold green]")
+                console.print(f"  • Validator: {validator_file.validator_path}")
+                if validator_file.test_path:
+                    console.print(f"  • Test: {validator_file.test_path}")
+                
+                # Show preview of the validator
+                lines = validation_contents.split("\n")[:10]
+                preview = "\n".join(lines)
+                if len(validation_contents.split("\n")) > 10:
+                    preview += "\n..."
+                
+                syntax = Syntax(preview, "python", theme="monokai", line_numbers=False)
+                console.print(Panel(syntax, title=f"Preview: {validator_name}", border_style="green"))
+                
+            except Exception as e:
+                console.print(f"[red]Error saving validator files: {e}[/red]")
+    else:
+        console.print("\n[yellow]Warning: No files were generated by the agent.[/yellow]")
