@@ -89,7 +89,7 @@ class TestProjectConfigManagerClassMethods:
             ProjectConfigManager.set_runtime_custom_path(path)
             
             # Verify the runtime path was set
-            assert ProjectConfigManager.runtime_custom_path == path
+            assert ProjectConfigManager.runtime_custom_path == path / ".determystic"
             
             # Clean up
             ProjectConfigManager.runtime_custom_path = None
