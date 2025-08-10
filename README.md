@@ -79,14 +79,6 @@ My main annoyance in using these systems is when they output code that mostly wo
 
 It's a small thing but it's representative of a larger problem. The main control we have over these systems today is in their system prompts: specifying a AGENT.md or .cursorrules file to try to guide their behavior over text alone. This certainly works for higher level instructions like describing a feature scope. But we lose precision over what we're looking for by having to describe programming goals and constructs in natural language instead of code. Adding in AST validation changes that - and it turns out that LLMs are actually very good at writing AST validators even though they're pretty annoying for people
 
-## How it works
-
-When you see your LLMs outputting something that you know you never want in practice, you'll want to add a deterministic "validator". Copy some portion of your code file that exhibits the problem and run:
-
-```bash
-uv run ...
-```
-
 ## Random notes
 
 - Targeting just Python for now. Other languages can follow the same convention pretty closely, but we need to support AST validating for their syntax & test whether LLMs will output better AST validators when written in the same language or if we can use Python as a bridge for control logic
