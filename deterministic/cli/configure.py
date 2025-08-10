@@ -1,10 +1,7 @@
 """Configuration command for setting up API keys and other settings."""
 
-import sys
-from typing import Any, Dict
 
 import click
-from pydantic.fields import FieldInfo
 from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Prompt

@@ -60,38 +60,3 @@ def detect_git_root(start_path: Path) -> Optional[Path]:
     except (subprocess.CalledProcessError, FileNotFoundError):
         # Not in a git repository or git not available
         return None
-
-
-def detect_project_path(explicit_path: Optional[str | Path] = None) -> Path:
-    """
-    Detect the project path using the following priority:
-    1. If explicit_path is provided, use it as-is
-    2. Try to find pyproject.toml root
-    3. Fallback to git repository root
-    4. Fallback to current working directory
-    
-    Args:
-        explicit_path: Explicitly specified path (highest priority)
-        
-    Returns:
-        Resolved project path
-    """
-    # If explicit path is provided, use it as-is
-    if explicit_path is not None:
-        return Path(explicit_path).resolve()
-    
-    # Start from current working directory
-    cwd = Path.cwd()
-    
-    # Try to find pyproject.toml root
-    pyproject_root = detect_pyproject_path(cwd)
-    if pyproject_root is not None:
-        return pyproject_root
-    
-    # Fallback to git repository root
-    git_root = detect_git_root(cwd)
-    if git_root is not None:
-        return git_root
-    
-    # Final fallback to current working directory
-    return cwd

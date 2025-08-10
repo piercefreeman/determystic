@@ -39,7 +39,7 @@ class DeterministicSettings(BaseConfig):
     def load_from_disk(cls) -> "DeterministicSettings":
         try:
             return super().load_from_disk()
-        except Exception as e:
+        except Exception:
             CONSOLE.print(Panel(
                 "[bold red]Configuration Required[/bold red]\n\n"
                 "This tool requires an Anthropic API key to function.\n"

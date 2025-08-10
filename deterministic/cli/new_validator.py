@@ -13,7 +13,6 @@ from rich.syntax import Syntax
 
 from deterministic.io import detect_project_path
 from deterministic.configs.project import ProjectConfigManager
-from deterministic.configs.system import DeterministicSettings
 from deterministic.agents.create_validator import create_ast_validator_stream
 
 console = Console()
