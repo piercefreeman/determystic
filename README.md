@@ -85,9 +85,27 @@ It's a small thing but it's representative of a larger problem. The main control
 
 We provide some default validators that are good choices for most projects, but these can be disabled on a per project basis.
 
-- Code formatting and simple style conventions (powered by ruff)
-- Static typechecker to ensure functions are calling others with the right signature (powered by ty)
-- Hanging functions
+| Name | Validator | Description | Powered By |
+|------|-----------|-------------|------------|
+| `static_analysis` | **Static Analysis** | Code formatting, style conventions, and type checking | `ruff` + `ty` |
+| `hanging_functions` | **Hanging Functions** | Detects functions that are defined but never called | AST analysis |
+| `dynamic_ast` | **Dynamic AST** | Loads and runs custom validators from `.determystic` files | Custom AST traversers |
+
+## Configuration
+
+You can customize which validators run in your project by creating a `.determystic/config.toml` file in your project root. The configuration file supports excluding specific validators from running.
+
+### Excluding Validators
+
+To disable specific validators, add them to the `exclude` list in your config:
+
+```toml
+# .determystic/config.toml
+exclude = [
+    "Static Analysis",
+    "Hanging Functions"
+]
+```
 
 ## Random notes
 
