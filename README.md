@@ -55,7 +55,7 @@ Code: name: Optional[str] = None
 Feedback: Don't use Optional - use A | None
 ```
 
-This will add a new .deterministic hidden folder in your current project that you can introspect. But usually the logic looks pretty good zero-shot (we add internal tests to try to ensure that reasonableness of the validator we just wrote) so we can then run the validation:
+This will add a new .determystic hidden folder in your current project that you can introspect. But usually the logic looks pretty good zero-shot (we add internal tests to try to ensure that reasonableness of the validator we just wrote) so we can then run the validation:
 
 ```bash
 $ uvx determystic validate example_project
@@ -77,7 +77,7 @@ Programming agents are getting _really good_. You're hard pressed to find a prof
 
 My main annoyance in using these systems is when they output code that mostly works but is really messy, or against my own coding conventions. Typehinting in Python is especially egregious here. No matter how much I try to coerce my AGENT.md files, all of the SOTA models have a very strong preference to use List[] and Optional[]. I want to use the modern `list[]` and `A | None`.
 
-It's a small thing but it's representative of a larger problem. The main control we have today over these systems today is in their system prompts: specifying a AGENT.md or .cursorrules file to try to guide their behavior over text alone. This certainly works for higher level instructions like describing a feature scope. But we lose precision over what we're looking for by having to describe programming goals and constructs in natural language instead of code. Adding in AST validation changes that - and it turns out that LLMs are actually very good at writing AST validators even though they're pretty annoying for people
+It's a small thing but it's representative of a larger problem. The main control we have over these systems today is in their system prompts: specifying a AGENT.md or .cursorrules file to try to guide their behavior over text alone. This certainly works for higher level instructions like describing a feature scope. But we lose precision over what we're looking for by having to describe programming goals and constructs in natural language instead of code. Adding in AST validation changes that - and it turns out that LLMs are actually very good at writing AST validators even though they're pretty annoying for people
 
 ## How it works
 
