@@ -46,11 +46,13 @@ class ProjectConfigManager(BaseConfig):
         Set by the CLI layer to allow for custom paths to be set at runtime.
 
         """
+        path = path.absolute()
+        cls.runtime_custom_path = path
+
         # If set, we need to initialize it explicitly
         if not path.exists():
             config = cls()
-            config.save_to_disk(path / "config.toml")
-        cls.runtime_custom_path = path
+            config.save_to_disk()
 
     @classmethod
     def get_possible_config_paths(cls):
@@ -58,7 +60,7 @@ class ProjectConfigManager(BaseConfig):
         Get the custom path set by the CLI layer.
         """
         if cls.runtime_custom_path is not None:
-            return [cls.runtime_custom_path]
+            return [cls.runtime_custom_path / "config.toml"]
 
         return [
             detect_git_root(Path.cwd()) / ".deterministic" / "config.toml",

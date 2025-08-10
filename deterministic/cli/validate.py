@@ -13,7 +13,8 @@ from rich.spinner import Spinner
 from rich.table import Table
 from rich.text import Text
 
-from deterministic.io import detect_project_path
+from deterministic.configs.project import ProjectConfigManager
+from deterministic.io import detect_pyproject_path
 from deterministic.validators import (
     DynamicASTValidator,
     StaticAnalysisValidator,
@@ -34,7 +35,7 @@ def validate_command(path: Path | None, verbose: bool):
     # Note: This command doesn't require API configuration
     
     # Use path detection logic to determine the target path
-    target_path = detect_project_path(path)
+    target_path = detect_pyproject_path(path)
     
     # Ensure the target path exists
     if not target_path.exists():
@@ -84,13 +85,16 @@ def create_status_table(validators: list, results: dict) -> Table:
     return table
 
 
-async def run_validation(path: Path, verbose: bool):
+async def run_validation(path: Path | None, verbose: bool):
     """Run the validation process."""
     console.print(Panel.fit(
         f"[bold cyan]Validating:[/bold cyan] {path.absolute()}",
         border_style="cyan"
     ))
     
+    if path:
+        ProjectConfigManager.set_runtime_custom_path(path / ".deterministic")
+
     # Get all validators using the create_validators class method pattern
     validators = []
     

@@ -11,7 +11,7 @@ from rich.panel import Panel
 from rich.prompt import Prompt
 from rich.syntax import Syntax
 
-from deterministic.io import detect_project_path
+from deterministic.io import detect_pyproject_path
 from deterministic.configs.project import ProjectConfigManager
 from deterministic.configs.system import DeterministicSettings
 from deterministic.agents.create_validator import stream_create_validator
@@ -67,44 +67,17 @@ def get_multiline_input(prompt_text: str) -> str:
 
 @click.command()
 @click.argument("path", type=click.Path(path_type=Path), required=False)
-def new_validator_command(path: Path):
+def new_validator_command(path: Path | None):
     """Run the interactive validator creation workflow."""
     # Check configuration first
     if not check_configuration():
         sys.exit(1)
     
-    # Use path detection logic to determine the target path
-    target_path = detect_project_path(path)
-    
-    # Ensure the target path exists
-    if not target_path.exists():
-        console.print(f"[red]Error: Path '{target_path}' does not exist.[/red]")
-        sys.exit(1)
-    
-    # Initialize project config manager
-    config_path = target_path / ".deterministic" / "config.toml"
-    if config_path.exists():
-        console.print("[green]✓[/green] Found existing deterministic project")
-        ProjectConfigManager.set_runtime_custom_path(target_path / ".deterministic")
-        config_manager = ProjectConfigManager.load_from_disk()
-    else:
-        console.print("[yellow]Initializing new deterministic project...[/yellow]")
-        # Ensure directory exists
-        (target_path / ".deterministic").mkdir(parents=True, exist_ok=True)
-        ProjectConfigManager.set_runtime_custom_path(target_path / ".deterministic")
-        config_manager = ProjectConfigManager()
-        config_manager.save_to_disk()
-        console.print("[green]✓[/green] Created .deterministic directory structure")
-    
-    console.print("\n")
-    console.print(Panel.fit(
-        f"[bold magenta]AST Validator Agent[/bold magenta]\n"
-        f"Create comprehensive validators and tests for Python code\n"
-        f"[dim]Project: {target_path}[/dim]\n"
-        f"[dim]Config: {config_manager.config_dir}[/dim]",
-        border_style="magenta"
-    ))
-    
+    if path:
+        ProjectConfigManager.set_runtime_custom_path(path / ".deterministic")
+
+    config_manager = ProjectConfigManager.load_from_disk()
+
     # Get code snippet from user
     console.print("\n[bold]Step 1: Provide the code snippet[/bold]")
     code_snippet = get_multiline_input("Enter the bad Python code that your Agent generated:")

@@ -9,7 +9,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
-from deterministic.io import detect_project_path
+from deterministic.io import detect_pyproject_path
 from deterministic.configs.project import ProjectConfigManager
 
 console = Console()
@@ -20,7 +20,7 @@ console = Console()
 def list_validators_command(path: Path | None):
     """List all validators in a deterministic project."""
     # Use path detection logic to determine the target path
-    target_path = detect_project_path(path)
+    target_path = detect_pyproject_path(path)
     
     # Ensure the target path exists
     if not target_path.exists():

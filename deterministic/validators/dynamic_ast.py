@@ -25,7 +25,7 @@ class DynamicASTValidator(BaseValidator):
         validators = []
         
         # Find .deterministic config
-        config_manager = ProjectConfigManager(path)
+        config_manager = ProjectConfigManager.load_from_disk(path)
         if not config_manager.exists():
             return validators
         
