@@ -1,6 +1,5 @@
 """AST validator creation command."""
 
-import asyncio
 import sys
 from pathlib import Path
 import re

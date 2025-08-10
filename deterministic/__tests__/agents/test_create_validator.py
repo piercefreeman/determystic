@@ -203,7 +203,7 @@ class TestCreateValidator:
     async def test_real_tool_integration_end_to_end(self):
         """Test that our tools work end-to-end with realistic agent behavior."""
         from deterministic.agents.create_validator import (
-            agent, AgentDependencies, 
+            AgentDependencies, 
             write_file, read_file, edit_file, run_tests, finalize
         )
         
@@ -364,7 +364,7 @@ def test_clean_function():
         assert len(deps.validation_contents) > 0  # Legacy property
         assert len(deps.test_contents) > 0  # Legacy property
         
-        print(f"✅ End-to-end test completed successfully!")
+        print("✅ End-to-end test completed successfully!")
         print(f"📊 Created {len(deps.files)} files:")
         for filename, content in deps.files.items():
             print(f"  📄 {filename}: {len(content)} characters")

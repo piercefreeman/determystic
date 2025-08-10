@@ -81,10 +81,11 @@ class ProjectConfigManager(BaseConfig):
         """
         config_root = self.get_config_path().parent
         
-        validator_path = config_root / "validations" / f"{name}.py"
+        # We don't want to bundle .py files since these get picked up by the static analysis validators
+        validator_path = config_root / "validations" / f"{name}.deterministic"
         validator_path.parent.mkdir(parents=True, exist_ok=True)
 
-        test_path = config_root / "tests" / f"{name}.py"
+        test_path = config_root / "tests" / f"{name}.deterministic"
         test_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Write the validator script to the validator path

@@ -26,13 +26,13 @@ class StaticAnalysisValidator(BaseValidator):
             cls(path, ["ty", "check", str(path)])
         ]   
     
-    async def validate(self) -> ValidationResult:
+    async def validate(self, path: Path) -> ValidationResult:
         """Run the static analysis command on the given path."""
         process = await asyncio.create_subprocess_exec(
-            self.command,
+            *self.command,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
-            cwd=self.path
+            cwd=path
         )
         
         stdout, stderr = await process.communicate()

@@ -119,7 +119,7 @@ async def run_validation(path: Path | None, verbose: bool):
         tasks = []
         for validator in validators:
             async def run_and_store(v):
-                result = await v.validate()
+                result = await v.validate(path)
                 results[v.name] = result
                 return v.name, result
             tasks.append(run_and_store(validator))

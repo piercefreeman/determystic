@@ -336,7 +336,6 @@ async def read_external_file(
         # Read the external.py file from the deterministic package
         import deterministic.external
         import inspect
-        import os
         
         # Get the path to the external.py file
         external_file_path = inspect.getfile(deterministic.external)
