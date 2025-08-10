@@ -29,7 +29,8 @@ class DynamicASTValidator(BaseValidator):
 
         # Load each validator file as a separate validator instance
         for validator_file in config_manager.validators.values():
-            validator_path = path / validator_file.validator_path
+            # The validator_path is relative to the .deterministic directory, not the project root
+            validator_path = path / ".deterministic" / validator_file.validator_path
             
             # Create a DynamicASTValidator for this specific validator
             validator = cls(
@@ -67,8 +68,16 @@ class DynamicASTValidator(BaseValidator):
                 file_content = py_file.read_text()
                 relative_path = py_file.relative_to(path)
                 
-                # Run traverser
-                traverser = self.traverser_class(file_content, str(relative_path))
+                # Run traverser - check signature to handle different constructor patterns
+                sig = inspect.signature(self.traverser_class.__init__)
+                params = list(sig.parameters.keys())
+                
+                # If it only accepts 'self' and 'code', don't pass filename
+                if len(params) == 2 and 'filename' not in params:
+                    traverser = self.traverser_class(file_content)
+                else:
+                    traverser = self.traverser_class(file_content, str(relative_path))
+                
                 result = traverser.validate()
                 
                 if not result.is_valid and result.issues:
@@ -92,13 +101,16 @@ class DynamicASTValidator(BaseValidator):
             return None
         
         try:
-            # Load the module using importlib
-            spec = importlib.util.spec_from_file_location("validator_module", validator_path)
-            if spec is None or spec.loader is None:
-                return None
+            # Read the file content and execute it as Python code
+            code_content = validator_path.read_text()
             
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
+            # Create a temporary module
+            import types
+            module = types.ModuleType("validator_module")
+            module.__file__ = str(validator_path)
+            
+            # Execute the code in the module's namespace
+            exec(code_content, module.__dict__)
             
             # Find DeterministicTraverser subclasses
             for name in dir(module):
@@ -110,6 +122,6 @@ class DynamicASTValidator(BaseValidator):
             
             return None
             
-        except Exception:
+        except Exception as e:
             CONSOLE.print(f"[red]Error loading validator module: {e}[/red]")
             return None
