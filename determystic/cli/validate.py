@@ -116,18 +116,26 @@ async def run_validation(path: Path, verbose: bool):
     results = {}
     
     # Create live display
-    with Live(create_status_table(display_validators, results), console=console, refresh_per_second=4):
+    with Live(create_status_table(display_validators, results), console=console, refresh_per_second=4) as live:
         # Run validation in parallel
         tasks = []
         for validator in validators:
             async def run_and_store(v):
                 result = await v.validate(path)
                 results[v.name] = result
+                # Update the live display immediately when a validator completes
+                live.update(create_status_table(display_validators, results))
                 return v.name, result
             tasks.append(run_and_store(validator))
         
         # Wait for all validations to complete
         await asyncio.gather(*tasks)
+        
+        # Final update to ensure all results are displayed
+        live.update(create_status_table(display_validators, results))
+        
+        # Give a brief moment for users to see the final status
+        await asyncio.sleep(0.5)
     
     # Display final results
     console.print()  # Add spacing

@@ -282,6 +282,7 @@ source = { editable = "." }
 dependencies = [
     { name = "anthropic" },
     { name = "click" },
+    { name = "prompt-toolkit" },
     { name = "pydantic-ai" },
     { name = "pydantic-settings" },
     { name = "pytest" },
@@ -297,6 +298,7 @@ dependencies = [
 requires-dist = [
     { name = "anthropic", specifier = ">=0.39.0" },
     { name = "click", specifier = ">=8.1.0" },
+    { name = "prompt-toolkit", specifier = ">=3.0.0" },
     { name = "pydantic-ai", specifier = ">=0.0.14" },
     { name = "pydantic-settings", specifier = ">=2.0.0" },
     { name = "pytest", specifier = ">=8.0.0" },
