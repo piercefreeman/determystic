@@ -12,6 +12,11 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Prompt
 from rich.syntax import Syntax
+from prompt_toolkit import PromptSession
+from prompt_toolkit.key_binding import KeyBindings
+from prompt_toolkit.lexers import PygmentsLexer
+from pygments.lexers import PythonLexer # type: ignore
+from prompt_toolkit.patch_stdout import patch_stdout
 
 from determystic.configs.project import ProjectConfigManager
 from determystic.configs.system import DeterministicSettings
@@ -35,8 +40,11 @@ def get_settings() -> DeterministicSettings:
     return DeterministicSettings.load_from_disk()
 
 
-def get_multiline_input(prompt_text: str) -> str:
-    """Get multiline input from the user.
+async def get_multiline_input(prompt_text: str) -> str:
+    """Get multiline input from the user with bracketed paste support.
+    
+    This function properly handles pasted content with multiple newlines
+    by using prompt_toolkit's built-in bracketed paste support.
     
     Args:
         prompt_text: The prompt to display
@@ -45,26 +53,60 @@ def get_multiline_input(prompt_text: str) -> str:
         The user's multiline input
     """
     console.print(f"\n[bold cyan]{prompt_text}[/bold cyan]")
-    console.print("[dim]Press Enter twice (empty line) to finish, or Ctrl+D to end input:[/dim]\n")
+    console.print("[dim]You can paste code directly (even with multiple newlines).[/dim]")
+    console.print("[dim]Press Enter twice (empty line) to finish input:[/dim]\n")
     
-    lines = []
-    empty_line_count = 0
+    # Create key bindings for double enter submission
+    bindings = KeyBindings()
     
-    while True:
-        try:
-            line = input()
-            if line == "":
-                empty_line_count += 1
-                if empty_line_count >= 2:
-                    break
-                lines.append("")
-            else:
-                empty_line_count = 0
-                lines.append(line)
-        except EOFError:
-            break
+    @bindings.add('enter')
+    def _(event):
+        """Handle Enter key - submit if current line is empty and previous line was also empty."""
+        buffer = event.current_buffer
+        
+        # Get current line content
+        current_line = buffer.document.current_line
+        
+        # If current line is empty, check if we should submit
+        if not current_line.strip():
+            # Get all text and split into lines
+            all_text = buffer.document.text
+            lines = all_text.split('\n')
+            
+            # If we have at least one line and the last line is empty
+            if len(lines) >= 2 and not lines[-1].strip():
+                # Check if previous line was also empty (double enter condition)
+                if not lines[-2].strip():
+                    # Submit the input by accepting the buffer
+                    buffer.validate_and_handle()
+                    return
+        
+        # Otherwise, just insert a newline
+        buffer.insert_text('\n')
     
-    return "\n".join(lines).strip()
+    # Create a prompt session
+    session = PromptSession(
+        message="> ",
+        multiline=True,
+        key_bindings=bindings,
+        enable_history_search=False,
+        mouse_support=True,
+        lexer=PygmentsLexer(PythonLexer),  # Python syntax highlighting
+        # Bracketed paste is enabled by default in prompt_toolkit
+        # It automatically handles pasted content properly
+    )
+    
+    try:
+        # Use async prompt session to avoid event loop conflicts
+        with patch_stdout():
+            result = await session.prompt_async()
+        # Handle case where result is None (when user exits via our custom key binding)
+        if result is None:
+            return ""
+        return result.strip()
+    except (EOFError, KeyboardInterrupt):
+        # Handle Ctrl+D, Ctrl+C gracefully
+        return ""
 
 def format_validator_name(raw_validator_name: str) -> str:
     """
@@ -99,7 +141,7 @@ async def new_validator_command(path: Path | None):
 
     # Get code snippet from user
     console.print("\n[bold]Step 1: Provide the code snippet[/bold]")
-    code_snippet = get_multiline_input("Enter the bad Python code that your Agent generated:")
+    code_snippet = await get_multiline_input("Enter the bad Python code that your Agent generated:")
     
     if not code_snippet:
         console.print("[red]No code provided. Exiting.[/red]")
