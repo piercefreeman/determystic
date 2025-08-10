@@ -17,6 +17,7 @@ from determystic.configs.project import ProjectConfigManager
 from determystic.io import detect_pyproject_path
 from determystic.validators import (
     DynamicASTValidator,
+    HangingFunctionsValidator,
     StaticAnalysisValidator,
 )
 
@@ -98,13 +99,11 @@ async def run_validation(path: Path, verbose: bool):
         ProjectConfigManager.set_runtime_custom_path(path)
 
     # Get all validators using the create_validators class method pattern
-    validators = []
-    
-    # Add dynamic AST validators
-    validators.extend(DynamicASTValidator.create_validators(path))
-    
-    # Add static analysis validators
-    validators.extend(StaticAnalysisValidator.create_validators(path))
+    validators = [
+        *DynamicASTValidator.create_validators(path),
+        *StaticAnalysisValidator.create_validators(path),
+        *HangingFunctionsValidator.create_validators(path),
+    ]
     
     display_validators = validators
     
