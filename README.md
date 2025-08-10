@@ -13,7 +13,7 @@ We'll look into adding a MCP server in the future. But for the time being just a
 Append to your `.cursorrules` (Cursor) or `CLAUDE.md` (Claude Code).
 
 ```
-Before yielding results, you should ALWAYS call `uvx determystic validate`.
+Before yielding results, you should ALWAYS call `uvx determystic validate`. Iterate until all of our validators are passing.
 ```
 
 Also setup your anthropic key for our global configuration. This will be accessible across projects so you should only have to do this once:
