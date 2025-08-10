@@ -17,7 +17,7 @@ Before yielding results, you should ALWAYS call `uvx determystic validate`.
 When you have an issue, you can add a special validation case using:
 
 ```bash
-uvx deterministic new-validator
+uvx determystic new-validator
 ```
 
 ## Background
