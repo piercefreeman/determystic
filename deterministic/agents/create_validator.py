@@ -111,9 +111,12 @@ def process(value: Optional[str]) -> None:  # BAD: Use str | None
 
 ## Tool Usage Instructions
 
+**CRITICAL: Always start by reading the current external.py file to understand the latest available classes and functions.**
+
+- Use `read_external_file` FIRST to get the current external.py interface before implementation
 - Use `write_file` to write files with specific filenames:
-  - Use filename "validator.py" for the AST validator implementation
-  - Use filename "test_validator.py" for the test cases
+ - Use filename "validator.py" for the AST validator implementation
+ - Use filename "test_validator.py" for the test cases
 - Use `read_file` to read the contents of any file
 - Use `edit_file` to edit specific parts of a file
 - Use `run_tests` to execute tests and verify they work correctly
@@ -224,6 +227,11 @@ class FinalizeInput(BaseModel):
     message: str = Field(description="Summary of what was accomplished")
 
 
+class ReadExternalFileInput(BaseModel):
+    """Input for reading the external.py file."""
+    pass  # No parameters needed
+
+
 
 
 # Agent
@@ -316,6 +324,31 @@ async def edit_file(
     ctx.deps.files[input.filename] = new_content
     
     return f"✅ Replaced {replacements} occurrence(s) in '{input.filename}'"
+
+
+@agent.tool
+async def read_external_file(
+    ctx: RunContext[AgentDependencies], 
+    input: ReadExternalFileInput
+) -> str:
+    """Read the current external.py file to understand available classes and functions."""
+    try:
+        # Read the external.py file from the deterministic package
+        import deterministic.external
+        import inspect
+        import os
+        
+        # Get the path to the external.py file
+        external_file_path = inspect.getfile(deterministic.external)
+        
+        # Read the file content
+        with open(external_file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        return f"📄 Current external.py interface ({len(content)} characters):\n\n{content}"
+    
+    except Exception as e:
+        return f"❌ Error reading external.py: {str(e)}"
 
 
 @agent.tool

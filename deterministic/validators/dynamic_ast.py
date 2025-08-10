@@ -25,13 +25,10 @@ class DynamicASTValidator(BaseValidator):
         validators = []
         
         # Find .deterministic config
-        config_manager = ProjectConfigManager.load_from_disk(path)
-        if not config_manager.exists():
-            return validators
-        
+        config_manager = ProjectConfigManager.load_from_disk()
+
         # Load each validator file as a separate validator instance
-        validator_files = config_manager.list_validators()
-        for validator_file in validator_files:
+        for validator_file in config_manager.validators.values():
             validator_path = path / validator_file.validator_path
             
             # Create a DynamicASTValidator for this specific validator
