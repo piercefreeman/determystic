@@ -49,11 +49,6 @@ class ProjectConfigManager(BaseConfig):
         path = path.absolute()
         cls.runtime_custom_path = path
 
-        # If set, we need to initialize it explicitly
-        if not path.exists():
-            config = cls()
-            config.save_to_disk()
-
     @classmethod
     def get_possible_config_paths(cls):
         """

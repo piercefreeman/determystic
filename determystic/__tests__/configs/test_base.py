@@ -24,7 +24,7 @@ def reset_class_state():
 class ConcreteTestConfig(BaseConfig):
     """Concrete implementation of BaseConfig for testing."""
     
-    name: str
+    name: str = "default_test_config"
     version: str = "1.0.0"
     
     @classmethod
@@ -99,8 +99,8 @@ class TestGetConfigPath:
         ["other_file.toml"],
         ["wrong_config.toml", "another_wrong.toml"],
     ])
-    def test_get_config_path_raises_when_no_file_found(self, missing_files: list[str]) -> None:
-        """Test that get_config_path raises FileNotFoundError when no config file exists."""
+    def test_get_config_path_creates_default_when_no_file_found(self, missing_files: list[str]) -> None:
+        """Test that get_config_path creates a default config when no config file exists."""
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
             
@@ -116,12 +116,13 @@ class TestGetConfigPath:
             ]
             
             with patch.object(ConcreteTestConfig, 'get_possible_config_paths', return_value=mock_paths):
-
+                # The business logic now creates a default config when none exists
+                result_path = ConcreteTestConfig.get_config_path()
                 
-                with pytest.raises(FileNotFoundError) as exc_info:
-                    ConcreteTestConfig.get_config_path()
-                
-                assert "No configuration file found" in str(exc_info.value)
+                # Should return the first path from possible paths
+                assert result_path == temp_path / "test_config.toml"
+                # The directory should be created and file should exist
+                assert result_path.exists()
 
     def test_get_config_path_caches_found_path(self) -> None:
         """Test that get_config_path caches the found path for subsequent calls."""
@@ -180,9 +181,8 @@ class TestLoadFromDisk:
                 assert config.version == expected_version
 
     @pytest.mark.parametrize("invalid_data,error_type", [
-        ({}, ValidationError),  # Missing required 'name' field
-        ({"version": "1.0.0"}, ValidationError),  # Missing required 'name' field
         ({"name": 123}, ValidationError),  # Invalid type for 'name'
+        ({"name": "test", "version": 123}, ValidationError),  # Invalid type for 'version'
     ])
     def test_load_from_disk_invalid_config(
         self, 
@@ -205,17 +205,20 @@ class TestLoadFromDisk:
                 with pytest.raises(error_type):
                     ConcreteTestConfig.load_from_disk()
 
-    def test_load_from_disk_file_not_found(self) -> None:
-        """Test that load_from_disk raises FileNotFoundError when config file doesn't exist."""
+    def test_load_from_disk_creates_default_config(self) -> None:
+        """Test that load_from_disk creates a default config when file doesn't exist."""
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
             
             # Mock get_possible_config_paths to return non-existent files
             with patch.object(ConcreteTestConfig, 'get_possible_config_paths', return_value=[temp_path / "nonexistent.toml"]):
-
+                # The business logic now creates a default config when none exists
+                config = ConcreteTestConfig.load_from_disk()
                 
-                with pytest.raises(FileNotFoundError):
-                    ConcreteTestConfig.load_from_disk()
+                # Should return a valid config with default values
+                assert config is not None
+                assert config.name == "default_test_config"
+                assert config.version == "1.0.0"
 
 
 class TestSaveToDisk:

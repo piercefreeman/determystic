@@ -14,10 +14,45 @@ Append to your `.cursorrules` (Cursor) or `CLAUDE.md` (Claude Code).
 Before yielding results, you should ALWAYS call `uvx determystic validate`.
 ```
 
+Also setup your anthropic key for our global configuration. This will be accessible across projects so you should only have to do this once:
+
+```bash
+uvx determystic configure
+```
+
 When you have an issue, you can add a special validation case using:
 
 ```bash
 uvx determystic new-validator
+```
+
+## Example
+
+Create a new project with a main file with some code that we don't like:
+
+```bash
+from typing import Optional
+from pydantic import BaseModel
+
+
+class MyModel(BaseModel):
+    name: Optional[str] = None
+    age: int
+
+
+def main():
+    model = MyModel(name="John", age=30)
+    print(model)
+
+if __name__ == "__main__":
+    main()
+```
+
+In this case, the fact that there's an Optional typehint instead of modern Python syntax (A | None = None). We can add this as a rule:
+
+```bash
+Code: name: Optional[str] = None
+Feedback: Don't use Optional - use A | None
 ```
 
 ## Background
@@ -26,7 +61,7 @@ Programming agents are getting _really good_. You're hard pressed to find a prof
 
 My main annoyance in using these systems is when they output code that mostly works but is really messy, or against my own coding conventions. Typehinting in Python is especially egregious here. No matter how much I try to coerce my AGENT.md files, all of the SOTA models have a very strong preference to use List[] and Optional[]. I want to use the modern `list[]` and `A | None`.
 
-It's a small thing but it's representative of a larger problem. The main control we have today over these systems today is in their system prompts: specifying a AGENT.md or .cursorrules file to try to guide their behavior over text alone. This certainly works for higher level instructions like describing a feature scope. But we lose precision over what we're looking for by having to describe programming goals and constructs in natural language instead of code.
+It's a small thing but it's representative of a larger problem. The main control we have today over these systems today is in their system prompts: specifying a AGENT.md or .cursorrules file to try to guide their behavior over text alone. This certainly works for higher level instructions like describing a feature scope. But we lose precision over what we're looking for by having to describe programming goals and constructs in natural language instead of code. Adding in AST validation changes that - and it turns out that LLMs are actually very good at writing AST validators even though they're pretty annoying for people
 
 ## How it works
 

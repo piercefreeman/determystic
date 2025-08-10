@@ -36,10 +36,12 @@ class DeterministicSettings(BaseConfig):
         return [config_dir / "config.toml"]
 
     @classmethod
-    def load_from_disk(cls) -> "DeterministicSettings":
+    def load_from_disk(cls, required: bool = True) -> "DeterministicSettings":
         try:
             return super().load_from_disk()
         except Exception:
+            if not required:
+                return None
             CONSOLE.print(Panel(
                 "[bold red]Configuration Required[/bold red]\n\n"
                 "This tool requires an Anthropic API key to function.\n"
