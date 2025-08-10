@@ -13,7 +13,15 @@ from pydantic import ValidationError
 from deterministic.configs.base import BaseConfig
 
 
-class TestBaseConfig(BaseConfig):
+@pytest.fixture(autouse=True)
+def reset_class_state():
+    """Reset the class state before each test."""
+    ConcreteTestConfig._found_path = None
+    yield
+    ConcreteTestConfig._found_path = None
+
+
+class ConcreteTestConfig(BaseConfig):
     """Concrete implementation of BaseConfig for testing."""
     
     name: str
@@ -33,7 +41,7 @@ class TestGetPossibleConfigPaths:
     """Test the get_possible_config_paths abstract method."""
     
     @pytest.mark.parametrize("config_class,expected_paths", [
-        (TestBaseConfig, [Path("test_config.toml"), Path(".test_config.toml"), Path("config/test.toml")]),
+        (ConcreteTestConfig, [Path("test_config.toml"), Path(".test_config.toml"), Path("config/test.toml")]),
     ])
     def test_get_possible_config_paths_implementation(
         self, 
@@ -65,22 +73,23 @@ class TestGetConfigPath:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
             
-            # Create the existing files
+            # Create the existing files in temp directory
             for file_name in existing_files:
                 file_path = temp_path / file_name
                 file_path.parent.mkdir(parents=True, exist_ok=True)
                 file_path.write_text("[test]\nname = 'test'\n")
             
-            # Mock get_possible_config_paths to return paths in temp directory
-            with patch.object(TestBaseConfig, 'get_possible_config_paths') as mock_paths:
-                mock_paths.return_value = [
-                    temp_path / "test_config.toml",
-                    temp_path / ".test_config.toml", 
-                    temp_path / "config/test.toml"
-                ]
-                
-                config = TestBaseConfig(name="test")
-                result_path = config.get_config_path()
+            # Mock get_possible_config_paths to return paths in temp directory  
+            # The existing files should match the paths returned by the mock
+            mock_paths = [
+                temp_path / "test_config.toml",
+                temp_path / ".test_config.toml", 
+                temp_path / "config/test.toml"
+            ]
+            
+            with patch.object(ConcreteTestConfig, 'get_possible_config_paths', return_value=mock_paths):
+
+                result_path = ConcreteTestConfig.get_config_path()
                 
                 assert result_path == temp_path / expected_file
                 assert result_path.exists()
@@ -100,17 +109,17 @@ class TestGetConfigPath:
                 (temp_path / file_name).write_text("[test]\nname = 'test'\n")
             
             # Mock get_possible_config_paths to return paths in temp directory
-            with patch.object(TestBaseConfig, 'get_possible_config_paths') as mock_paths:
-                mock_paths.return_value = [
-                    temp_path / "test_config.toml",
-                    temp_path / ".test_config.toml",
-                    temp_path / "config/test.toml"
-                ]
-                
-                config = TestBaseConfig(name="test")
+            mock_paths = [
+                temp_path / "test_config.toml",
+                temp_path / ".test_config.toml",
+                temp_path / "config/test.toml"
+            ]
+            
+            with patch.object(ConcreteTestConfig, 'get_possible_config_paths', return_value=mock_paths):
+
                 
                 with pytest.raises(FileNotFoundError) as exc_info:
-                    config.get_config_path()
+                    ConcreteTestConfig.get_config_path()
                 
                 assert "No configuration file found" in str(exc_info.value)
 
@@ -121,22 +130,19 @@ class TestGetConfigPath:
             config_file = temp_path / "test_config.toml"
             config_file.write_text("[test]\nname = 'test'\n")
             
-            with patch.object(TestBaseConfig, 'get_possible_config_paths') as mock_paths:
-                mock_paths.return_value = [config_file]
-                
-                config = TestBaseConfig(name="test")
-                
+            # Mock get_possible_config_paths AND use the actual file so Path.exists() works
+            with patch.object(ConcreteTestConfig, 'get_possible_config_paths', return_value=[config_file]):
                 # First call should find and cache the path
-                first_result = config.get_config_path()
+                first_result = ConcreteTestConfig.get_config_path()
                 assert first_result == config_file
                 
                 # Second call should return cached path without searching again
-                second_result = config.get_config_path()
+                second_result = ConcreteTestConfig.get_config_path()
                 assert second_result == config_file
                 assert first_result == second_result
                 
                 # Verify the path was cached
-                assert config._found_path == config_file
+                assert ConcreteTestConfig._found_path == config_file
 
 
 class TestLoadFromDisk:
@@ -163,11 +169,11 @@ class TestLoadFromDisk:
                 tomli_w.dump(config_data, f)
             
             # Mock get_possible_config_paths to return our test file
-            with patch.object(TestBaseConfig, 'get_possible_config_paths') as mock_paths:
-                mock_paths.return_value = [config_file]
+            with patch.object(ConcreteTestConfig, 'get_possible_config_paths', return_value=[config_file]):
+
                 
                 # Load config from disk
-                config = TestBaseConfig.load_from_disk()
+                config = ConcreteTestConfig.load_from_disk()
                 
                 assert config is not None
                 assert config.name == expected_name
@@ -193,11 +199,11 @@ class TestLoadFromDisk:
                 tomli_w.dump(invalid_data, f)
             
             # Mock get_possible_config_paths to return our test file
-            with patch.object(TestBaseConfig, 'get_possible_config_paths') as mock_paths:
-                mock_paths.return_value = [config_file]
+            with patch.object(ConcreteTestConfig, 'get_possible_config_paths', return_value=[config_file]):
+
                 
                 with pytest.raises(error_type):
-                    TestBaseConfig.load_from_disk()
+                    ConcreteTestConfig.load_from_disk()
 
     def test_load_from_disk_file_not_found(self) -> None:
         """Test that load_from_disk raises FileNotFoundError when config file doesn't exist."""
@@ -205,11 +211,11 @@ class TestLoadFromDisk:
             temp_path = Path(temp_dir)
             
             # Mock get_possible_config_paths to return non-existent files
-            with patch.object(TestBaseConfig, 'get_possible_config_paths') as mock_paths:
-                mock_paths.return_value = [temp_path / "nonexistent.toml"]
+            with patch.object(ConcreteTestConfig, 'get_possible_config_paths', return_value=[temp_path / "nonexistent.toml"]):
+
                 
                 with pytest.raises(FileNotFoundError):
-                    TestBaseConfig.load_from_disk()
+                    ConcreteTestConfig.load_from_disk()
 
 
 class TestSaveToDisk:
@@ -231,11 +237,11 @@ class TestSaveToDisk:
             config_file.write_text("")
             
             # Mock get_possible_config_paths to return our test file
-            with patch.object(TestBaseConfig, 'get_possible_config_paths') as mock_paths:
-                mock_paths.return_value = [config_file]
+            with patch.object(ConcreteTestConfig, 'get_possible_config_paths', return_value=[config_file]):
+
                 
                 # Create config and save to disk
-                config = TestBaseConfig(name=name, version=version)
+                config = ConcreteTestConfig(name=name, version=version)
                 config.save_to_disk()
                 
                 # Verify file was created and has correct content
@@ -260,11 +266,11 @@ class TestSaveToDisk:
                 tomli_w.dump(initial_data, f)
             
             # Mock get_possible_config_paths to return our test file
-            with patch.object(TestBaseConfig, 'get_possible_config_paths') as mock_paths:
-                mock_paths.return_value = [config_file]
+            with patch.object(ConcreteTestConfig, 'get_possible_config_paths', return_value=[config_file]):
+
                 
                 # Create new config and save to disk
-                new_config = TestBaseConfig(name="new_name", version="2.0.0")
+                new_config = ConcreteTestConfig(name="new_name", version="2.0.0")
                 new_config.save_to_disk()
                 
                 # Verify file was overwritten with new content
@@ -289,14 +295,16 @@ class TestSaveToDisk:
             config_file.write_text("")
             
             # Mock get_possible_config_paths to return our test file
-            with patch.object(TestBaseConfig, 'get_possible_config_paths') as mock_paths:
-                mock_paths.return_value = [config_file]
+            with patch.object(ConcreteTestConfig, 'get_possible_config_paths', return_value=[config_file]):
+
                 
                 # Create config, save to disk, then load back
-                original_config = TestBaseConfig(**config_data)
+                original_config = ConcreteTestConfig(**config_data)
                 original_config.save_to_disk()
                 
-                loaded_config = TestBaseConfig.load_from_disk()
+                # Reset again to test the load functionality
+                ConcreteTestConfig._found_path = None
+                loaded_config = ConcreteTestConfig.load_from_disk()
                 
                 # Verify loaded config matches original
                 assert loaded_config is not None
