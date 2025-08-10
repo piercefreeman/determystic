@@ -350,8 +350,8 @@ class TestProjectConfigManagerIntegration:
                 config = ProjectConfigManager(project_name="test_project")
                 
                 # Add multiple validators
-                validator1 = config.new_validation("validator1", "# code1", "# test1", "First validator")
-                validator2 = config.new_validation("validator2", "# code2", "# test2", "Second validator")
+                config.new_validation("validator1", "# code1", "# test1", "First validator")
+                config.new_validation("validator2", "# code2", "# test2", "Second validator")
                 
                 # Verify both exist
                 assert len(config.validators) == 2

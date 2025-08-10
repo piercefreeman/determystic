@@ -1,6 +1,5 @@
 """Dynamic AST validator that loads custom validators from .determystic files."""
 
-import importlib.util
 import inspect
 from pathlib import Path
 from typing import Type

@@ -429,9 +429,7 @@ async def stream_create_validator(
                     async for stream_event in tool_stream:
                         if isinstance(stream_event, FunctionToolCallEvent):
                             # Tool call started
-                            tool_name = stream_event.part.tool_name
-                            tool_args = getattr(stream_event.part, 'args', {})
-                            
+                            tool_name = stream_event.part.tool_name                            
                             event = StreamEvent(
                                 event_type='tool_call_start',
                                 content=f"🔧 Starting {tool_name}",

@@ -3,13 +3,13 @@
 import ast
 import tempfile
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pytest
 
-from determystic.external import DeterministicTraverser, ValidationIssue, ValidationResult
+from determystic.external import DeterministicTraverser
 from determystic.validators.dynamic_ast import DynamicASTValidator
-from determystic.configs.project import ProjectConfigManager, ValidatorFile
+from determystic.configs.project import ProjectConfigManager
 
 
 class MockTraverserSingleArg(DeterministicTraverser):

@@ -2,11 +2,10 @@
 
 import asyncio
 from pathlib import Path
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, patch
 import pytest
 
 from determystic.validators.static_analysis import StaticAnalysisValidator
-from determystic.validators.base import ValidationResult
 
 
 class TestStaticAnalysisValidator:
