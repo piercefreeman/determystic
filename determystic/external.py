@@ -32,7 +32,7 @@ class ValidationResult:
     """Result from running a validation check."""
     
     is_valid: bool
-    issues: list[ValidationIssue] = None
+    issues: list[ValidationIssue] | None = None
     message: str | None = None
     
     def __post_init__(self):

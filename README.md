@@ -28,7 +28,7 @@ uvx determystic new-validator
 
 ## Example
 
-Create a new project with a main file with some code that we don't like:
+Let's say your LLM generated some code that we don't like:
 
 ```bash
 from typing import Optional
@@ -53,6 +53,12 @@ In this case, the fact that there's an Optional typehint instead of modern Pytho
 ```bash
 Code: name: Optional[str] = None
 Feedback: Don't use Optional - use A | None
+```
+
+This will add a new .deterministic hidden folder in your current project that you can introspect. But usually the logic looks pretty good zero-shot (we add internal tests to try to ensure that reasonableness of the validator we just wrote) so we can then run the validation:
+
+```bash
+$ 
 ```
 
 ## Background

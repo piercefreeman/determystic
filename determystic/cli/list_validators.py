@@ -20,24 +20,26 @@ console = Console()
 def list_validators_command(path: Path | None):
     """List all validators in a determystic project."""
     # Use path detection logic to determine the target path
-    target_path = detect_pyproject_path(path)
+    target_path = detect_pyproject_path(path or Path.cwd())
     
     # Ensure the target path exists
-    if not target_path.exists():
+    if not target_path or not target_path.exists():
         console.print(f"[red]Error: Path '{target_path}' does not exist.[/red]")
         sys.exit(1)
     
+    # At this point target_path is guaranteed to exist
+    assert target_path is not None
     # Initialize project config manager
     config_manager = ProjectConfigManager(target_path)
     
     # Check if project is initialized
-    if not config_manager.exists():
+    if not config_manager.exists():  # type: ignore
         console.print(f"[yellow]No determystic project found at {target_path}[/yellow]")
         console.print("[dim]Run 'determystic new-validator' to initialize a project.[/dim]")
         sys.exit(0)
     
     # Load validators
-    validators = config_manager.list_validators()
+    validators = config_manager.list_validators()  # type: ignore
     
     if not validators:
         console.print(Panel(
@@ -98,4 +100,4 @@ def list_validators_command(path: Path | None):
     console.print(table)
     
     # Show summary
-    console.print(f"\n[dim]Found {len(validators)} validator(s) in {config_manager.config_dir}[/dim]")
+    console.print(f"\n[dim]Found {len(validators)} validator(s) in {config_manager.config_dir}[/dim]")  # type: ignore

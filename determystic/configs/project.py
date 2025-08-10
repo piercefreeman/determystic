@@ -57,10 +57,14 @@ class ProjectConfigManager(BaseConfig):
         if cls.runtime_custom_path is not None:
             return [cls.runtime_custom_path / "config.toml"]
 
-        return [
-            detect_git_root(Path.cwd()) / ".determystic" / "config.toml",
-            detect_pyproject_path(Path.cwd()) / ".determystic" / "config.toml",
-        ]
+        git_root = detect_git_root(Path.cwd())
+        pyproject_root = detect_pyproject_path(Path.cwd())
+        paths = []
+        if git_root:
+            paths.append(git_root / ".determystic" / "config.toml")
+        if pyproject_root:
+            paths.append(pyproject_root / ".determystic" / "config.toml")
+        return paths
     
     def new_validation(self, name: str, validator_script: str, test_script: str, description: str | None = None) -> ValidatorFile:
         """Add a new validator to the project configuration.

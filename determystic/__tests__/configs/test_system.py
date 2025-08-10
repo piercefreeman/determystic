@@ -186,8 +186,8 @@ class TestDeterministicSettingsModel:
         # This should not raise an error due to extra="ignore"
         settings = DeterministicSettings(
             anthropic_api_key="test-key",
-            extra_field="should_be_ignored",
-            another_extra=123
+            extra_field="should_be_ignored",  # type: ignore
+            another_extra=123  # type: ignore
         )
         assert settings.anthropic_api_key == "test-key"
         # Extra fields should not be accessible
