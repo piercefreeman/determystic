@@ -100,8 +100,21 @@ another-script = "module.submodule:entry_point"
 
     def test_create_validators(self, temp_project_dir: Path) -> None:
         """Test create_validators factory method."""
-        # Mock ProjectConfigManager
-        mock_config_manager = ProjectConfigManager(temp_project_dir)
+        # Create basic config structure
+        config_dir = temp_project_dir / ".determystic"
+        config_dir.mkdir(exist_ok=True)
+        config_path = config_dir / "config.toml"
+        config_path.write_text('''
+version = "1.0"
+[validators]
+[settings]
+''')
+
+        # Reset and set runtime path and load config manager
+        ProjectConfigManager.runtime_custom_path = None
+        ProjectConfigManager._found_path = None
+        ProjectConfigManager.set_runtime_custom_path(temp_project_dir)
+        mock_config_manager = ProjectConfigManager.load_from_disk()
         
         validators = HangingFunctionsValidator.create_validators(mock_config_manager)
         

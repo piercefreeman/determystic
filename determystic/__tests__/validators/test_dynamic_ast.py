@@ -8,7 +8,7 @@ import pytest
 
 from determystic.external import DeterministicTraverser
 from determystic.validators.dynamic_ast import DynamicASTValidator
-from determystic.configs.project import ProjectConfigManager, ValidatorFile
+from determystic.configs.project import ProjectConfigManager
 
 
 class MockTraverserSingleArg(DeterministicTraverser):
@@ -122,23 +122,25 @@ version = "1.0"
 [settings]
 ''')
         
-        # Mock ProjectConfigManager with empty validators
-        mock_config_manager = ProjectConfigManager(temp_project_dir)
-        mock_config_manager.validators = {}
+        # Reset and set runtime path and load config manager
+        ProjectConfigManager.runtime_custom_path = None
+        ProjectConfigManager._found_path = None
+        ProjectConfigManager.set_runtime_custom_path(temp_project_dir)
+        mock_config_manager = ProjectConfigManager.load_from_disk()
         
         validators = DynamicASTValidator.create_validators(mock_config_manager)
         assert len(validators) == 0
 
     def test_create_validators_with_single_arg_validator(
-        self, 
-        temp_project_dir: Path, 
+        self,
+        temp_project_dir: Path,
         sample_validator_content_single_arg: str
     ) -> None:
         """Test create_validators with a validator that uses single argument constructor."""
         # Create validator file
         validator_file = temp_project_dir / ".determystic" / "validations" / "test_validator.determystic"
         validator_file.write_text(sample_validator_content_single_arg)
-        
+
         # Create config
         config_path = temp_project_dir / ".determystic" / "config.toml"
         config_path.write_text('''
@@ -148,15 +150,12 @@ name = "test_validator"
 validator_path = "validations/test_validator.determystic"
 [settings]
 ''')
-        
-        # Create mock config manager
-        mock_config_manager = ProjectConfigManager(temp_project_dir)
-        mock_config_manager.validators = {
-            "test_validator": ValidatorFile(
-                name="test_validator",
-                validator_path="validations/test_validator.determystic"
-            )
-        }
+
+        # Reset and set runtime path and load config manager
+        ProjectConfigManager.runtime_custom_path = None
+        ProjectConfigManager._found_path = None
+        ProjectConfigManager.set_runtime_custom_path(temp_project_dir)
+        mock_config_manager = ProjectConfigManager.load_from_disk()
         
         validators = DynamicASTValidator.create_validators(mock_config_manager)
         
@@ -184,14 +183,11 @@ validator_path = "validations/test_validator.determystic"
 [settings]
 ''')
         
-        # Create mock config manager
-        mock_config_manager = ProjectConfigManager(temp_project_dir)
-        mock_config_manager.validators = {
-            "test_validator": ValidatorFile(
-                name="test_validator",
-                validator_path="validations/test_validator.determystic"
-            )
-        }
+        # Reset and set runtime path and load config manager
+        ProjectConfigManager.runtime_custom_path = None
+        ProjectConfigManager._found_path = None
+        ProjectConfigManager.set_runtime_custom_path(temp_project_dir)
+        mock_config_manager = ProjectConfigManager.load_from_disk()
         
         validators = DynamicASTValidator.create_validators(mock_config_manager)
         
@@ -211,14 +207,11 @@ validator_path = "validations/missing.determystic"
 [settings]
 ''')
         
-        # Create mock config manager
-        mock_config_manager = ProjectConfigManager(temp_project_dir)
-        mock_config_manager.validators = {
-            "missing_validator": ValidatorFile(
-                name="missing_validator",
-                validator_path="validations/missing.determystic"
-            )
-        }
+        # Reset and set runtime path and load config manager
+        ProjectConfigManager.runtime_custom_path = None
+        ProjectConfigManager._found_path = None
+        ProjectConfigManager.set_runtime_custom_path(temp_project_dir)
+        mock_config_manager = ProjectConfigManager.load_from_disk()
         
         validators = DynamicASTValidator.create_validators(mock_config_manager)
         
