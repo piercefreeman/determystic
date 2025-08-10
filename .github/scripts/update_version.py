@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 from sys import stdout
 
-import toml
+import toml # type: ignore
 from packaging.version import parse
 
 
