@@ -2,10 +2,11 @@
 
 import asyncio
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, patch, MagicMock
 import pytest
 
 from determystic.validators.static_analysis import StaticAnalysisValidator
+from determystic.configs.project import ProjectConfigManager
 
 
 class TestStaticAnalysisValidator:
@@ -24,7 +25,12 @@ class TestStaticAnalysisValidator:
     def test_create_validators(self) -> None:
         """Test that create_validators returns correct validators."""
         path = Path("/test/path")
-        validators = StaticAnalysisValidator.create_validators(path)
+        
+        # Mock ProjectConfigManager
+        mock_config_manager = MagicMock(spec=ProjectConfigManager)
+        mock_config_manager.project_root = path
+        
+        validators = StaticAnalysisValidator.create_validators(mock_config_manager)
         
         assert len(validators) == 2
         
@@ -52,7 +58,7 @@ class TestStaticAnalysisValidator:
             mock_process.communicate.return_value = (b"All checks passed", b"")
             mock_exec.return_value = mock_process
             
-            result = await validator.validate(path)
+            result = await validator.validate()
             
             assert result.success is True
             assert result.output == "All checks passed"
@@ -79,7 +85,7 @@ class TestStaticAnalysisValidator:
             mock_process.communicate.return_value = (b"", b"Linting errors found")
             mock_exec.return_value = mock_process
             
-            result = await validator.validate(path)
+            result = await validator.validate()
             
             assert result.success is False
             assert result.output == "Linting errors found"
@@ -98,7 +104,7 @@ class TestStaticAnalysisValidator:
             mock_process.communicate.return_value = (b"", b"Warning message")
             mock_exec.return_value = mock_process
             
-            result = await validator.validate(path)
+            result = await validator.validate()
             
             assert result.success is True
             assert result.output == "Warning message"
@@ -117,7 +123,7 @@ class TestStaticAnalysisValidator:
             mock_process.communicate.return_value = (b"", b"")
             mock_exec.return_value = mock_process
             
-            result = await validator.validate(path)
+            result = await validator.validate()
             
             assert result.success is True
             assert result.output == ""
@@ -135,7 +141,7 @@ class TestStaticAnalysisValidator:
             mock_process.communicate.return_value = (b"", b"")
             mock_exec.return_value = mock_process
             
-            await validator.validate(path)
+            await validator.validate()
             
             # Verify command was unpacked correctly (not passed as a list)
             mock_exec.assert_called_once_with(

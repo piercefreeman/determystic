@@ -25,6 +25,8 @@ class ProjectConfigManager(BaseConfig):
     project_name: str | None = Field(default=None, description="Name of the project")
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
+
+    exclude: list[str] = Field(default_factory=list, description="List of validators to exclude from validation")
     
     # Validator files tracking
     validators: dict[str, ValidatorFile] = Field(
@@ -117,3 +119,11 @@ class ProjectConfigManager(BaseConfig):
             self.updated_at = datetime.now()
             return True
         return False
+
+    @property
+    def project_root(self) -> Path:
+        """
+        Get the project root.
+        """
+        # Direct parent will be the .determystic directory, so we need to go up one more level
+        return self.get_config_path().parent.parent

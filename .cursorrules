@@ -1,0 +1,1 @@
+Running tests: always use `uv run pytest -vvv` to run tests.
