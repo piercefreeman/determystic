@@ -58,7 +58,7 @@ Feedback: Don't use Optional - use A | None
 This will add a new .deterministic hidden folder in your current project that you can introspect. But usually the logic looks pretty good zero-shot (we add internal tests to try to ensure that reasonableness of the validator we just wrote) so we can then run the validation:
 
 ```bash
-$ uv run determystic validate example_project
+$ uvx determystic validate example_project
 
 Detailed Results:
 
