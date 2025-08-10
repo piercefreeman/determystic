@@ -1,7 +1,7 @@
 """Validators for Python projects."""
 
-from .ast_parser import ASTParserValidator
 from .base import BaseValidator, ValidationResult
+from .dynamic_ast import DynamicASTValidator
 from .static_analysis import RuffValidator, StaticAnalysisValidator, TypeValidator
 
 __all__ = [
@@ -10,5 +10,5 @@ __all__ = [
     "StaticAnalysisValidator",
     "RuffValidator",
     "TypeValidator",
-    "ASTParserValidator",
+    "DynamicASTValidator",
 ]

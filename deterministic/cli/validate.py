@@ -15,9 +15,8 @@ from rich.text import Text
 
 from deterministic.io import detect_project_path
 from deterministic.validators import (
-    ASTParserValidator,
+    DynamicASTValidator,
     RuffValidator,
-    StaticAnalysisValidator,
     TypeValidator,
 )
 
@@ -27,18 +26,11 @@ console = Console()
 @click.command()
 @click.argument("path", type=click.Path(path_type=Path), required=False)
 @click.option(
-    "--validator",
-    "-v",
-    type=click.Choice(["all", "ruff", "ty", "ast"], case_sensitive=False),
-    default="all",
-    help="Which validator to run",
-)
-@click.option(
     "--verbose",
     is_flag=True,
     help="Show detailed output",
 )
-def validate_command(path: Path | None, validator: str, verbose: bool):
+def validate_command(path: Path | None, verbose: bool):
     """Run validation on a Python project."""
     # Note: This command doesn't require API configuration
     
@@ -50,7 +42,7 @@ def validate_command(path: Path | None, validator: str, verbose: bool):
         console.print(f"[red]Error: Path '{target_path}' does not exist.[/red]")
         sys.exit(1)
     
-    asyncio.run(run_validation(target_path, validator, verbose))
+    asyncio.run(run_validation(target_path, verbose))
 
 
 def create_status_table(validators: list, results: dict) -> Table:
@@ -93,30 +85,25 @@ def create_status_table(validators: list, results: dict) -> Table:
     return table
 
 
-async def run_validation(path: Path, validator_choice: str, verbose: bool):
+async def run_validation(path: Path, verbose: bool):
     """Run the validation process."""
     console.print(Panel.fit(
         f"[bold cyan]Validating:[/bold cyan] {path.absolute()}",
         border_style="cyan"
     ))
     
-    # Select validators based on choice
-    if validator_choice == "all":
-        validators = [StaticAnalysisValidator()]
-    elif validator_choice == "ruff":
-        validators = [RuffValidator()]
-    elif validator_choice == "ty":
-        validators = [TypeValidator()]
-    elif validator_choice == "ast":
-        validators = [ASTParserValidator()]
-    else:
-        validators = [StaticAnalysisValidator()]
+    # Load dynamic AST validators from project configuration
+    dynamic_ast_validator = DynamicASTValidator(path)
+    dynamic_validators = dynamic_ast_validator.validators
     
-    # For StaticAnalysisValidator, we want to track its sub-validators
-    if len(validators) == 1 and isinstance(validators[0], StaticAnalysisValidator):
-        display_validators = validators[0].validators
-    else:
-        display_validators = validators
+    # Run all validators: built-in + dynamic AST validators
+    validators = [RuffValidator(path), TypeValidator(path)] + dynamic_validators
+    display_validators = validators
+    
+    # Check if we have any validators to run
+    if not display_validators:
+        console.print("[yellow]No validators found to run.[/yellow]")
+        return
     
     results = {}
     
@@ -125,20 +112,11 @@ async def run_validation(path: Path, validator_choice: str, verbose: bool):
         # Run validation
         tasks = []
         for validator in validators:
-            if isinstance(validator, StaticAnalysisValidator):
-                # For composite validator, run sub-validators individually for progress tracking
-                for sub_validator in validator.validators:
-                    async def run_and_store(v):
-                        result = await v.validate(path)
-                        results[v.name] = result
-                        return v.name, result
-                    tasks.append(run_and_store(sub_validator))
-            else:
-                async def run_and_store(v):
-                    result = await v.validate(path)
-                    results[v.name] = result
-                    return v.name, result
-                tasks.append(run_and_store(validator))
+            async def run_and_store(v):
+                result = await v.validate(path)
+                results[v.name] = result
+                return v.name, result
+            tasks.append(run_and_store(validator))
         
         # Wait for all validations to complete
         await asyncio.gather(*tasks)

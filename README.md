@@ -1,6 +1,6 @@
-# deterministic
+# determystic
 
-Deterministic is a library to force your agents to give you a coding style that you're happy with, deterministically every time.
+Determystic is a library to force your agents to give you a coding style that you're happy with, deterministically every time.
 
 It works by creating deterministic validators for your coding conventions, using the AST of your programming language. If you see a bad piece of code and can describe why it's bad and why you never want to see code like that in the future, there's a good chance we can write a deterministic validator to make sure it never happens again.
 

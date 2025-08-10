@@ -20,5 +20,9 @@ dependencies = [
 [project.scripts]
 deterministic = "deterministic.entrypoint:cli"
 
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [tool.uv]
 package = true

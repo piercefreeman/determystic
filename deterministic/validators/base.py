@@ -18,31 +18,28 @@ class ValidationResult:
 class BaseValidator(ABC):
     """Abstract base class for all validators."""
     
-    def __init__(self, name: str) -> None:
+    def __init__(self, *, name: str, path: Path | None = None) -> None:
         """Initialize the validator.
         
-        Args:
-            name: Name of the validator
+        :param name: Name of the validator
+        :param path: Optional path to the project/directory being validated
+
         """
         self.name = name
+        self.path = path
+    
+    @abstractmethod
+    @classmethod
+    def create_validators(cls, path: Path) -> list["BaseValidator"]:
+        """
+        Factory function that can create multiple validators for a given path.
+        """
+        pass
     
     @abstractmethod
     async def validate(self, path: Path) -> ValidationResult:
-        """Run validation on the given path.
-        
-        Args:
-            path: Path to validate
-            
-        Returns:
-            ValidationResult with success status and output
-        """
         pass
     
     @property
     def display_name(self) -> str:
-        """Get the display name for this validator.
-        
-        Returns:
-            Display name for UI purposes
-        """
         return self.name.replace("_", " ").title()

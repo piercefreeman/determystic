@@ -24,7 +24,42 @@ SYSTEM_PROMPT = """You are an expert Python engineering agent specialized in cre
 The validator should:
 - Return is_valid=False when the code exhibits the described issue (problematic pattern found)
 - Return is_valid=True when the code does NOT exhibit the issue (code is acceptable)
-- Detect the specific pattern or problem the user is concerned about
+- Provide detailed error information with line numbers and code context
+
+## Required AST Traverser Pattern
+
+You MUST create a validator using the AST traverser pattern from `deterministic.external`:
+
+```python
+from deterministic.external import DeterministicTraverser
+
+class YourValidatorTraverser(DeterministicTraverser):
+    '''Custom AST traverser for your specific validation.'''
+    
+    def visit_SomeASTNode(self, node):
+        '''Visit specific AST nodes and check for issues.'''
+        
+        # Check for your specific pattern
+        if self.detect_problem(node):
+            self.add_error(
+                node, 
+                "Clear description of what's wrong and how to fix it"
+            )
+        
+        # Continue traversing
+        self.generic_visit(node)
+    
+    def detect_problem(self, node):
+        '''Your custom logic to detect the problematic pattern.'''
+        # Example: check if node contains "Optional["
+        try:
+            node_source = ast.unparse(node)
+            return "Optional[" in node_source
+        except:
+            return False
+```
+
+**The traverser will be automatically discovered and executed by the validation system.**
 
 ## Examples of Pattern Detection
 
@@ -40,55 +75,58 @@ def test_calculation():
         pass  # BAD: Test is hiding errors
 ```
 
-**Code that should NOT be flagged (is_valid=True):**
-```python
-def test_calculation():
-    result = calculate(5, 2)
-    assert result == 2.5  # GOOD: No exception handling
-
-def process_data():
-    try:
-        data = fetch_data()
-    except Exception:
-        return None  # OK: Not a test function
-```
-
-### Example 2: Undefined variables
-**User Description:** "Code uses variables that haven't been defined"
+### Example 2: Optional type hints
+**User Description:** "Don't use Optional[T], use T | None instead"
 
 **Code that SHOULD be flagged (is_valid=False):**
 ```python
-def calculate_sum(a, b):
-    return a + b + c  # BAD: 'c' is undefined
-```
+from typing import Optional
 
-**Code that should NOT be flagged (is_valid=True):**
-```python
-def calculate_sum(a, b, c):
-    return a + b + c  # OK: All variables defined
+def process(value: Optional[str]) -> None:  # BAD: Use str | None
+    pass
 ```
 
 ## Implementation Requirements
 
-Your ast_validator.py should return ValidationResult with:
-- is_valid=False when the problematic pattern IS found
-- is_valid=True when the problematic pattern is NOT found
+1. **Always create an AST traverser class:**
+   ```python
+   from deterministic.external import DeterministicTraverser
+   
+   class YourValidatorTraverser(DeterministicTraverser):
+       # Your validation logic here
+   ```
 
-Your ast_test.py should:
-1. Test the user-provided code (should be flagged as problematic)
-2. Test additional problematic examples
-3. Test valid code that should NOT be flagged
-4. Include edge cases
+2. **Your traverser class should:**
+   - Inherit from `DeterministicTraverser`
+   - Override specific `visit_*` methods for the AST nodes you want to check
+   - Use `self.add_error(node, message)` to report issues
+   - Call `self.generic_visit(node)` to continue traversing child nodes
+
+3. **Error reporting is automatic:**
+   - Line numbers and column positions are extracted from AST nodes
+   - Code context is automatically generated
+   - All you need to do is call `self.add_error(node, "your message")`
+
+4. **Your ast_test.py should:**
+   - Import your traverser class
+   - Test the user-provided code (should be flagged as problematic)
+   - Test additional problematic examples
+   - Test valid code that should NOT be flagged
+   - Include edge cases
+   - Create the traverser and call `.validate()` to get results
 
 ## Workflow
 
-1. Understand the problematic pattern described
-2. Implement ast_validator.py to detect that pattern
-3. Create comprehensive tests in ast_test.py
-4. Run tests to ensure everything works
-5. Finalize once all tests pass
+1. Import DeterministicTraverser from deterministic.external
+2. Understand the problematic pattern described  
+3. Create a traverser class that inherits from DeterministicTraverser
+4. Override the appropriate visit_* methods to detect your pattern
+5. Use self.add_error() to report issues with automatic line numbers
+6. Create comprehensive tests in ast_test.py that instantiate your traverser
+7. Run tests to ensure everything works and error messages are detailed
+8. Finalize once all tests pass
 
-Remember: NEVER skip tests or use try/except to bypass test logic."""
+Remember: ALWAYS use the DeterministicTraverser pattern - no validate_code functions!"""
 
 
 # Tool Models
@@ -157,6 +195,10 @@ class AgentDependencies:
         if self.temp_dir and self.temp_dir.exists():
             import shutil
             shutil.rmtree(self.temp_dir)
+    
+    def get_file_contents(self) -> dict[str, str]:
+        """Get the contents of all files that were created/modified."""
+        return {filename: content for filename, content in self.files.items() if filename in self.dirty_files}
 
 
 # Create the agent at module level (idiomatic pydantic-ai pattern)
@@ -180,7 +222,7 @@ def _create_agent():
         raise ValueError("ANTHROPIC_API_KEY not found in environment or configuration")
     
     # Create model - it will use the environment variable automatically
-    model = AnthropicModel("claude-3-5-sonnet-20241022")
+    model = AnthropicModel("claude-sonnet-4-20250514")
     
     agent = Agent(
         model=model,
@@ -282,20 +324,8 @@ async def run_test(ctx: RunContext[AgentDependencies], input: TestRunInput) -> s
 
 
 async def finalize_test(ctx: RunContext[AgentDependencies], input: FinalizeInput) -> str:
-    """Finalize the test suite and save files."""
+    """Finalize the test suite and return file contents."""
     try:
-        # Create output directory
-        output_dir = Path("output")
-        output_dir.mkdir(exist_ok=True)
-        
-        # Save all dirty files to output directory
-        saved_files = []
-        for filename in ctx.deps.dirty_files:
-            if filename in ctx.deps.files:
-                output_path = output_dir / filename
-                output_path.write_text(ctx.deps.files[filename])
-                saved_files.append(str(output_path))
-        
         # Clean up temp directory
         ctx.deps.cleanup()
         
@@ -304,8 +334,8 @@ async def finalize_test(ctx: RunContext[AgentDependencies], input: FinalizeInput
 
 Summary: {input.message}
 
-Files saved to output directory:
-{chr(10).join(f"  - {f}" for f in saved_files)}
+Generated files:
+{chr(10).join(f"  - {f}" for f in ctx.deps.dirty_files)}
 
 The AST validator and comprehensive test suite are ready for use.
 """
@@ -457,11 +487,16 @@ Please:
                             yield event
                             
             elif agent.is_end_node(node):
-                # Final result
+                # Final result - include file contents
+                file_contents = deps.get_file_contents()
                 event = StreamEvent(
                     event_type='final_result',
                     content=f"✅ Complete! {node.data.output}",
-                    metadata={'step': 'final_result', 'output': node.data.output}
+                    metadata={
+                        'step': 'final_result', 
+                        'output': node.data.output,
+                        'file_contents': file_contents
+                    }
                 )
                 if callback:
                     await callback(event)
