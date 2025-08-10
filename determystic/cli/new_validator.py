@@ -26,19 +26,6 @@ from determystic.io import async_to_sync
 console = Console()
 
 
-def check_configuration() -> bool:
-    """Check if the system configuration is valid."""
-    try:
-        settings = DeterministicSettings.load_from_disk()
-        return bool(settings.anthropic_api_key)
-    except Exception:
-        return False
-
-
-def get_settings() -> DeterministicSettings:
-    """Get the system settings."""
-    return DeterministicSettings.load_from_disk()
-
 
 async def get_multiline_input(prompt_text: str) -> str:
     """Get multiline input from the user with bracketed paste support.
@@ -130,8 +117,11 @@ def format_validator_name(raw_validator_name: str) -> str:
 @async_to_sync
 async def new_validator_command(path: Path | None):
     """Run the interactive validator creation workflow."""
-    # Check configuration first
-    if not check_configuration():
+
+    # Try to load the system config before we kick off
+    settings = DeterministicSettings.load_from_disk()
+    if not settings.anthropic_api_key:
+        console.print("[red]Anthropic API key not found. Please run `uvx determystic configure` to set it.[/red]")
         sys.exit(1)
     
     if path:
@@ -188,9 +178,6 @@ async def new_validator_command(path: Path | None):
     # Run the agent
     console.print("\n[bold cyan]🤖 Starting AST Validator Agent...[/bold cyan]")
     console.print("[dim]This may take a few moments as the agent creates and tests the validator.[/dim]\n")
-    
-    # Get system settings and create Anthropic client
-    settings = get_settings()
     
     # Import Anthropic model
     anthropic_provider = AnthropicProvider(api_key=settings.anthropic_api_key)
