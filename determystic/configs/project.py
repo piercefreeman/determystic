@@ -117,3 +117,11 @@ class ProjectConfigManager(BaseConfig):
             self.updated_at = datetime.now()
             return True
         return False
+
+    @property
+    def project_root(self) -> Path:
+        """
+        Get the project root.
+        """
+        # Direct parent will be the .determystic directory, so we need to go up one more level
+        return self.get_config_path().parent.parent

@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from determystic.configs.project import ProjectConfigManager
+
 
 @dataclass
 class ValidationResult:
@@ -30,14 +32,14 @@ class BaseValidator(ABC):
     
     @classmethod
     @abstractmethod
-    def create_validators(cls, path: Path) -> list["BaseValidator"]:
+    def create_validators(cls, config_manager: ProjectConfigManager) -> list["BaseValidator"]:
         """
         Factory function that can create multiple validators for a given path.
         """
         pass
     
     @abstractmethod
-    async def validate(self, path: Path) -> ValidationResult:
+    async def validate(self) -> ValidationResult:
         pass
     
     @property

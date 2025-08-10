@@ -3,13 +3,12 @@
 import ast
 import tempfile
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
 from determystic.external import DeterministicTraverser
 from determystic.validators.dynamic_ast import DynamicASTValidator
-from determystic.configs.project import ProjectConfigManager
+from determystic.configs.project import ProjectConfigManager, ValidatorFile
 
 
 class MockTraverserSingleArg(DeterministicTraverser):
@@ -123,10 +122,12 @@ version = "1.0"
 [settings]
 ''')
         
-        with patch.object(ProjectConfigManager, 'get_possible_config_paths', 
-                         return_value=[config_path]):
-            validators = DynamicASTValidator.create_validators(temp_project_dir)
-            assert len(validators) == 0
+        # Mock ProjectConfigManager with empty validators
+        mock_config_manager = ProjectConfigManager(temp_project_dir)
+        mock_config_manager.validators = {}
+        
+        validators = DynamicASTValidator.create_validators(mock_config_manager)
+        assert len(validators) == 0
 
     def test_create_validators_with_single_arg_validator(
         self, 
@@ -148,20 +149,20 @@ validator_path = "validations/test_validator.determystic"
 [settings]
 ''')
         
-        # Set the runtime custom path to point to our temp directory
-        ProjectConfigManager.set_runtime_custom_path(temp_project_dir)
-        # Clear cached path
-        ProjectConfigManager._found_path = None
-        try:
-            validators = DynamicASTValidator.create_validators(temp_project_dir)
-            
-            assert len(validators) == 1
-            assert validators[0].name == "test_validator"
-            assert validators[0].traverser_class is not None  # type: ignore
-        finally:
-            # Clean up
-            ProjectConfigManager.runtime_custom_path = None
-            ProjectConfigManager._found_path = None
+        # Create mock config manager
+        mock_config_manager = ProjectConfigManager(temp_project_dir)
+        mock_config_manager.validators = {
+            "test_validator": ValidatorFile(
+                name="test_validator",
+                validator_path="validations/test_validator.determystic"
+            )
+        }
+        
+        validators = DynamicASTValidator.create_validators(mock_config_manager)
+        
+        assert len(validators) == 1
+        assert validators[0].name == "test_validator"
+        assert validators[0].traverser_class is not None  # type: ignore
 
     def test_create_validators_with_two_arg_validator(
         self, 
@@ -183,20 +184,20 @@ validator_path = "validations/test_validator.determystic"
 [settings]
 ''')
         
-        # Set the runtime custom path to point to our temp directory
-        ProjectConfigManager.set_runtime_custom_path(temp_project_dir)
-        # Clear cached path
-        ProjectConfigManager._found_path = None
-        try:
-            validators = DynamicASTValidator.create_validators(temp_project_dir)
-            
-            assert len(validators) == 1
-            assert validators[0].name == "test_validator"
-            assert validators[0].traverser_class is not None  # type: ignore
-        finally:
-            # Clean up
-            ProjectConfigManager.runtime_custom_path = None
-            ProjectConfigManager._found_path = None
+        # Create mock config manager
+        mock_config_manager = ProjectConfigManager(temp_project_dir)
+        mock_config_manager.validators = {
+            "test_validator": ValidatorFile(
+                name="test_validator",
+                validator_path="validations/test_validator.determystic"
+            )
+        }
+        
+        validators = DynamicASTValidator.create_validators(mock_config_manager)
+        
+        assert len(validators) == 1
+        assert validators[0].name == "test_validator"
+        assert validators[0].traverser_class is not None  # type: ignore
 
     def test_create_validators_nonexistent_file(self, temp_project_dir: Path) -> None:
         """Test create_validators with a validator file that doesn't exist."""
@@ -210,19 +211,19 @@ validator_path = "validations/missing.determystic"
 [settings]
 ''')
         
-        # Set the runtime custom path to point to our temp directory
-        ProjectConfigManager.set_runtime_custom_path(temp_project_dir)
-        # Clear cached path
-        ProjectConfigManager._found_path = None
-        try:
-            validators = DynamicASTValidator.create_validators(temp_project_dir)
-            
-            # Should return empty list since file doesn't exist
-            assert len(validators) == 0
-        finally:
-            # Clean up
-            ProjectConfigManager.runtime_custom_path = None
-            ProjectConfigManager._found_path = None
+        # Create mock config manager
+        mock_config_manager = ProjectConfigManager(temp_project_dir)
+        mock_config_manager.validators = {
+            "missing_validator": ValidatorFile(
+                name="missing_validator",
+                validator_path="validations/missing.determystic"
+            )
+        }
+        
+        validators = DynamicASTValidator.create_validators(mock_config_manager)
+        
+        # Should return empty list since file doesn't exist
+        assert len(validators) == 0
 
     def test_load_validator_module_invalid_syntax(self, temp_project_dir: Path) -> None:
         """Test loading a validator module with invalid Python syntax."""
@@ -279,7 +280,7 @@ class NotATraverser:
         )
         validator.traverser_class = MockTraverserSingleArg
         
-        result = await validator.validate(temp_project_dir)
+        result = await validator.validate()
         
         # Should find the "bad_pattern" issue
         assert not result.success
@@ -305,7 +306,7 @@ class NotATraverser:
         )
         validator.traverser_class = MockTraverserTwoArgs
         
-        result = await validator.validate(temp_project_dir)
+        result = await validator.validate()
         
         # Should find the "another_bad_pattern" issue
         assert not result.success
@@ -331,7 +332,7 @@ class NotATraverser:
         )
         validator.traverser_class = MockTraverserSingleArg
         
-        result = await validator.validate(temp_project_dir)
+        result = await validator.validate()
         
         # Should pass validation
         assert result.success
@@ -348,7 +349,7 @@ class NotATraverser:
         )
         validator.traverser_class = MockTraverserSingleArg
         
-        result = await validator.validate(temp_project_dir)
+        result = await validator.validate()
         
         # Should pass with no files message
         assert result.success
@@ -369,7 +370,7 @@ class NotATraverser:
         )
         validator.traverser_class = None
         
-        result = await validator.validate(temp_project_dir)
+        result = await validator.validate()
         
         # Should fail validation
         assert not result.success
@@ -400,7 +401,7 @@ class NotATraverser:
         )
         validator.traverser_class = MockTraverserSingleArg
         
-        result = await validator.validate(temp_project_dir)
+        result = await validator.validate()
         
         # Should only process the regular file, not the hidden one
         assert not result.success

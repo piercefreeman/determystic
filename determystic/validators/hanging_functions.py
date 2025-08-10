@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Set, List
 from dataclasses import dataclass
 
+from determystic.configs.project import ProjectConfigManager
 from determystic.validators.base import BaseValidator, ValidationResult
 
 
@@ -108,20 +109,20 @@ class HangingFunctionsValidator(BaseValidator):
         super().__init__(name=name, path=path)
     
     @classmethod
-    def create_validators(cls, path: Path) -> list["BaseValidator"]:
+    def create_validators(cls, config_manager: ProjectConfigManager) -> list["BaseValidator"]:
         """Factory function that creates a single HangingFunctionsValidator instance."""
-        return [cls(path=path)]
+        return [cls(path=config_manager.project_root)]
     
-    async def validate(self, path: Path) -> ValidationResult:
+    async def validate(self) -> ValidationResult:
         """Validate the codebase for hanging functions."""
         # Find all Python files, excluding test files and hidden directories
-        python_files = self._get_python_files(path)
+        python_files = self._get_python_files(self.path)
         
         if not python_files:
             return ValidationResult(success=True, output="No Python files found")
         
         # Get script entrypoints from pyproject.toml
-        script_entrypoints = self._get_script_entrypoints(path)
+        script_entrypoints = self._get_script_entrypoints(self.path)
         
         # Collect all function definitions and calls
         all_functions: List[FunctionDef] = []
@@ -132,7 +133,7 @@ class HangingFunctionsValidator(BaseValidator):
             try:
                 content = py_file.read_text(encoding='utf-8')
                 tree = ast.parse(content, filename=str(py_file))
-                relative_path = str(py_file.relative_to(path))
+                relative_path = str(py_file.relative_to(self.path))
                 
                 # Collect function definitions
                 def_collector = FunctionDefinitionCollector(relative_path)

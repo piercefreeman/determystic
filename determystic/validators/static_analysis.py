@@ -4,6 +4,7 @@ import asyncio
 import asyncio.subprocess
 from pathlib import Path
 
+from determystic.configs.project import ProjectConfigManager
 from .base import BaseValidator, ValidationResult
 
 
@@ -20,19 +21,19 @@ class StaticAnalysisValidator(BaseValidator):
         self.command = command
     
     @classmethod
-    def create_validators(cls, path: Path) -> list[BaseValidator]:
+    def create_validators(cls, config_manager: ProjectConfigManager) -> list[BaseValidator]:
         return [
-            cls(path, ["ruff", "check", str(path), "--no-fix"]),
-            cls(path, ["ty", "check", str(path)])
+            cls(config_manager.project_root, ["ruff", "check", str(config_manager.project_root), "--no-fix"]),
+            cls(config_manager.project_root, ["ty", "check", str(config_manager.project_root)])
         ]   
     
-    async def validate(self, path: Path) -> ValidationResult:
+    async def validate(self) -> ValidationResult:
         """Run the static analysis command on the given path."""
         process = await asyncio.create_subprocess_exec(
             *self.command,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
-            cwd=path
+            cwd=self.path
         )
         
         stdout, stderr = await process.communicate()

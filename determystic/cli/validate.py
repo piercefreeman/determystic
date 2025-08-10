@@ -97,12 +97,13 @@ async def run_validation(path: Path, verbose: bool):
     
     if path:
         ProjectConfigManager.set_runtime_custom_path(path)
-
+    project_config = ProjectConfigManager.load_from_disk()
+    
     # Get all validators using the create_validators class method pattern
     validators = [
-        *DynamicASTValidator.create_validators(path),
-        *StaticAnalysisValidator.create_validators(path),
-        *HangingFunctionsValidator.create_validators(path),
+        *DynamicASTValidator.create_validators(project_config),
+        *StaticAnalysisValidator.create_validators(project_config),
+        *HangingFunctionsValidator.create_validators(project_config),
     ]
     
     display_validators = validators

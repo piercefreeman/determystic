@@ -19,12 +19,9 @@ class DynamicASTValidator(BaseValidator):
         self.traverser_class = self._load_validator_module(validator_path)
     
     @classmethod
-    def create_validators(cls, path: Path) -> list["BaseValidator"]:
+    def create_validators(cls, config_manager: ProjectConfigManager) -> list["BaseValidator"]:
         """Factory function that creates DynamicASTValidator instances for each determystic validator."""
         validators = []
-        
-        # Find .determystic config
-        config_manager = ProjectConfigManager.load_from_disk()
         
         if not config_manager or not config_manager.validators:
             return validators
@@ -32,13 +29,13 @@ class DynamicASTValidator(BaseValidator):
         # Load each validator file as a separate validator instance
         for validator_file in config_manager.validators.values():
             # The validator_path is relative to the .determystic directory, not the project root
-            validator_path = path / ".determystic" / validator_file.validator_path
+            validator_path = config_manager.project_root / ".determystic" / validator_file.validator_path
             
             # Create a DynamicASTValidator for this specific validator
             validator = cls(
                 name=validator_file.name,
                 validator_path=validator_path,
-                path=path
+                path=config_manager.project_root
             )
             
             # Only add if the traverser class was successfully loaded
@@ -47,7 +44,7 @@ class DynamicASTValidator(BaseValidator):
         
         return validators
     
-    async def validate(self, path: Path) -> ValidationResult:
+    async def validate(self) -> ValidationResult:
         """Run this validator against Python files."""
         # Check if the traverser class was loaded successfully
         if self.traverser_class is None:
@@ -57,7 +54,7 @@ class DynamicASTValidator(BaseValidator):
             )
         
         # Find all Python files
-        python_files = list(path.rglob("*.py"))
+        python_files = list(self.path.rglob("*.py"))
         python_files = [f for f in python_files if not any(part.startswith('.') for part in f.parts)]
         
         if not python_files:
@@ -68,7 +65,7 @@ class DynamicASTValidator(BaseValidator):
         for py_file in python_files:
             try:
                 file_content = py_file.read_text()
-                relative_path = py_file.relative_to(path)
+                relative_path = py_file.relative_to(self.path)
                 
                 # Run traverser - check signature to handle different constructor patterns
                 sig = inspect.signature(self.traverser_class.__init__)
@@ -90,7 +87,7 @@ class DynamicASTValidator(BaseValidator):
                         all_issues.append(formatted_issue)
             
             except Exception as e:
-                all_issues.append(f"{py_file.relative_to(path)}: Error: {e}")
+                all_issues.append(f"{py_file.relative_to(self.path)}: Error: {e}")
         
         success = len(all_issues) == 0
         output = "\n\n".join(all_issues) if all_issues else "No issues found"

@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from determystic.validators.hanging_functions import HangingFunctionsValidator
+from determystic.configs.project import ProjectConfigManager
 
 
 class TestHangingFunctionsValidator:
@@ -99,7 +100,10 @@ another-script = "module.submodule:entry_point"
 
     def test_create_validators(self, temp_project_dir: Path) -> None:
         """Test create_validators factory method."""
-        validators = HangingFunctionsValidator.create_validators(temp_project_dir)
+        # Mock ProjectConfigManager
+        mock_config_manager = ProjectConfigManager(temp_project_dir)
+        
+        validators = HangingFunctionsValidator.create_validators(mock_config_manager)
         
         assert len(validators) == 1
         assert isinstance(validators[0], HangingFunctionsValidator)
@@ -116,8 +120,8 @@ another-script = "module.submodule:entry_point"
         python_file = temp_project_dir / "main.py"
         python_file.write_text(sample_code_with_hanging_function)
         
-        validator = HangingFunctionsValidator()
-        result = await validator.validate(temp_project_dir)
+        validator = HangingFunctionsValidator(path=temp_project_dir)
+        result = await validator.validate()
         
         # Should find the hanging function
         assert not result.success
@@ -136,8 +140,8 @@ another-script = "module.submodule:entry_point"
         python_file = temp_project_dir / "main.py"
         python_file.write_text(sample_code_no_hanging_functions)
         
-        validator = HangingFunctionsValidator()
-        result = await validator.validate(temp_project_dir)
+        validator = HangingFunctionsValidator(path=temp_project_dir)
+        result = await validator.validate()
         
         # Should pass validation
         assert result.success
@@ -154,8 +158,8 @@ another-script = "module.submodule:entry_point"
         python_file = temp_project_dir / "calculator.py"
         python_file.write_text(sample_code_with_class_methods)
         
-        validator = HangingFunctionsValidator()
-        result = await validator.validate(temp_project_dir)
+        validator = HangingFunctionsValidator(path=temp_project_dir)
+        result = await validator.validate()
         
         # Should find unused_method and _private_method but not __str__
         assert not result.success
@@ -192,8 +196,8 @@ another-script = "module.submodule:entry_point"
         regular_file = temp_project_dir / "main.py"
         regular_file.write_text(sample_code_with_hanging_function)
         
-        validator = HangingFunctionsValidator()
-        result = await validator.validate(temp_project_dir)
+        validator = HangingFunctionsValidator(path=temp_project_dir)
+        result = await validator.validate()
         
         # Should only find hanging functions in the regular file
         assert not result.success
@@ -226,8 +230,8 @@ another-script = "module.submodule:entry_point"
         regular_file = temp_project_dir / "main.py"
         regular_file.write_text(sample_code_with_hanging_function)
         
-        validator = HangingFunctionsValidator()
-        result = await validator.validate(temp_project_dir)
+        validator = HangingFunctionsValidator(path=temp_project_dir)
+        result = await validator.validate()
         
         # Should only process the regular file
         assert not result.success
@@ -263,8 +267,8 @@ def hanging_function():
         python_file = temp_project_dir / "main.py"
         python_file.write_text(python_code)
         
-        validator = HangingFunctionsValidator()
-        result = await validator.validate(temp_project_dir)
+        validator = HangingFunctionsValidator(path=temp_project_dir)
+        result = await validator.validate()
         
         # Should only find hanging_function, not the script entrypoints
         assert not result.success
@@ -275,8 +279,8 @@ def hanging_function():
     @pytest.mark.asyncio
     async def test_validate_no_python_files(self, temp_project_dir: Path) -> None:
         """Test validation when there are no Python files."""
-        validator = HangingFunctionsValidator()
-        result = await validator.validate(temp_project_dir)
+        validator = HangingFunctionsValidator(path=temp_project_dir)
+        result = await validator.validate()
         
         # Should pass with no files message
         assert result.success
@@ -299,8 +303,8 @@ def hanging_function():
     return "hanging"
 ''')
         
-        validator = HangingFunctionsValidator()
-        result = await validator.validate(temp_project_dir)
+        validator = HangingFunctionsValidator(path=temp_project_dir)
+        result = await validator.validate()
         
         # Should find hanging function in good file, skip bad file
         assert not result.success
@@ -332,8 +336,8 @@ result = calling_function()
         python_file = temp_project_dir / "main.py"
         python_file.write_text(python_code)
         
-        validator = HangingFunctionsValidator()
-        result = await validator.validate(temp_project_dir)
+        validator = HangingFunctionsValidator(path=temp_project_dir)
+        result = await validator.validate()
         
         # Should only find hanging_function
         assert not result.success
@@ -363,8 +367,8 @@ result = obj.called_method()
         python_file = temp_project_dir / "main.py"
         python_file.write_text(python_code)
         
-        validator = HangingFunctionsValidator()
-        result = await validator.validate(temp_project_dir)
+        validator = HangingFunctionsValidator(path=temp_project_dir)
+        result = await validator.validate()
         
         # Should only find hanging_method
         assert not result.success
@@ -374,7 +378,7 @@ result = obj.called_method()
 
     def test_display_name_property(self, temp_project_dir: Path) -> None:
         """Test that display_name property formats the name correctly."""
-        validator = HangingFunctionsValidator()
+        validator = HangingFunctionsValidator(path=temp_project_dir)
         
         # Should format underscores as title case
         assert validator.display_name == "Hanging Functions"
