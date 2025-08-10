@@ -52,3 +52,4 @@ class BaseConfig(BaseModel, ABC):
         
         with open(config_path, "wb") as f:
             tomli_w.dump(config_dict, f)
+    

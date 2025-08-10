@@ -5,7 +5,7 @@ import inspect
 from pathlib import Path
 from typing import Type
 
-from deterministic.project_config import ProjectConfigManager
+from deterministic.configs.project import ProjectConfigManager
 from deterministic.external import DeterministicTraverser
 from deterministic.validators.base import BaseValidator, ValidationResult
 from deterministic.logging import CONSOLE

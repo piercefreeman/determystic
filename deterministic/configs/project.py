@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, Field
+from deterministic.configs.base import BaseConfig
 
 
 class ValidatorFile(BaseModel):
@@ -15,7 +16,7 @@ class ValidatorFile(BaseModel):
     description: str | None = Field(default=None, description="Description of what this validator checks")
 
 
-class ProjectConfig(BaseModel):
+class ProjectConfigManager(BaseConfig):
     """Configuration for a deterministic project."""
     
     version: str = Field(default="1.0", description="Configuration version")

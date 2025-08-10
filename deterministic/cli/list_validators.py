@@ -10,7 +10,7 @@ from rich.table import Table
 from rich.text import Text
 
 from deterministic.io import detect_project_path
-from deterministic.project_config import ProjectConfigManager
+from deterministic.configs.project import ProjectConfigManager
 
 console = Console()
 

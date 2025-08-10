@@ -30,10 +30,10 @@ class DeterministicSettings(BaseConfig):
 
     @classmethod
     def get_possible_config_paths(cls) -> list[Path]:
-        """Get the configuration directory path."""
+        """Get the configuration file paths."""
         config_dir = Path.home() / ".deterministic"
         config_dir.mkdir(exist_ok=True)
-        return [config_dir]
+        return [config_dir / "config.toml"]
 
     @classmethod
     def load_from_disk(cls) -> "DeterministicSettings":
