@@ -18,21 +18,21 @@ Before yielding results, you should ALWAYS call `uvx determystic validate`.
 
 Also setup your anthropic key for our global configuration. This will be accessible across projects so you should only have to do this once:
 
-```bash
-uvx determystic configure
+```shell
+$ uvx determystic configure
 ```
 
 When you have an issue, you can add a special validation case using:
 
-```bash
-uvx determystic new-validator
+```shell
+$ uvx determystic new-validator
 ```
 
 ## Example
 
 Let's say your LLM generated some code that we don't like:
 
-```bash
+```python
 from typing import Optional
 from pydantic import BaseModel
 
@@ -59,7 +59,7 @@ Feedback: Don't use Optional - use A | None
 
 This will add a new .determystic hidden folder in your current project that you can introspect. But usually the logic looks pretty good zero-shot (we add internal tests to try to ensure that reasonableness of the validator we just wrote) so we can then run the validation:
 
-```bash
+```shell
 $ uvx determystic validate example_project
 
 Detailed Results:
