@@ -109,6 +109,28 @@ def process(value: Optional[str]) -> None:  # BAD: Use str | None
    - Create valid examples that should NOT be flagged
    - Test edge cases
 
+## Code Extraction Guidelines
+
+**CRITICAL: When provided with large code blocks, extract ONLY the minimal viable portions that demonstrate the problematic pattern.**
+
+### Extraction Principles:
+- **Focus on the core issue**: Extract only the specific code patterns that exhibit the described problem
+- **Minimal reproduction**: Create the smallest possible example that still demonstrates the issue
+- **Remove irrelevant context**: Strip out imports, helper functions, and other code that doesn't contribute to the pattern detection
+- **Preserve essential structure**: Keep just enough context (function signatures, class definitions) to make the extracted code valid and meaningful
+- **Create focused test cases**: Generate both good and bad examples that are concise and directly related to the AST parsing requirements
+
+### Example Transformation:
+If given a 200-line file with complex business logic, extract just the 5-10 lines that contain the problematic pattern:
+```python
+# Instead of the entire complex function...
+def simple_example():
+    try:  # BAD: Exception handling in test
+        result = some_operation()
+    except Exception:
+        pass
+```
+
 ## Tool Usage Instructions
 
 **CRITICAL: Always start by reading the current external.py file to understand the latest available classes and functions.**
@@ -139,18 +161,23 @@ User-provided code that SHOULD BE DETECTED as problematic:
 
 Issue Description: {requirements}
 
+**CRITICAL: If the provided code is large or complex, extract ONLY the minimal portions that demonstrate the problematic pattern. Focus on creating the smallest possible reproduction case that still exhibits the issue.**
+
 IMPORTANT: The validator should return is_valid=False (flag as problematic) when it finds code matching the described issue.
 
 Please:
-1. Implement the validator that detects when code matches the problematic pattern described
-2. Create comprehensive pytest tests including:
-   - A test with the exact user-provided code (should be flagged as problematic)
-   - Additional examples of the problematic pattern (should be flagged)
-   - Examples of valid code that should NOT be flagged
-   - Edge cases and boundary conditions
-3. Run the tests to ensure everything works correctly
-4. The validator should identify the SPECIFIC issue described, not general code quality
-5. Finalize the implementation once all tests pass
+1. **Extract minimal examples**: If the user-provided code is lengthy, identify and extract only the core patterns that need to be detected
+2. Implement the validator that detects when code matches the problematic pattern described
+3. Create comprehensive pytest tests including:
+   - A test with the essential parts of the user-provided code (should be flagged as problematic)
+   - Additional minimal examples of the problematic pattern (should be flagged)
+   - Simple examples of valid code that should NOT be flagged
+   - Edge cases and boundary conditions (keep these concise)
+4. Run the tests to ensure everything works correctly
+5. The validator should identify the SPECIFIC issue described, not general code quality
+6. Finalize the implementation once all tests pass
+
+Remember: Focus on minimal viable reproduction cases for both good and bad behavior within the AST parsing and testing framework.
 """
 
 # Dependencies
