@@ -106,7 +106,7 @@ async def run_validation(path: Path, verbose: bool):
         *HangingFunctionsValidator.create_validators(project_config),
     ]
     
-    display_validators = validators
+    display_validators = [v for v in validators if v.display_name not in project_config.exclude]
     
     # Check if we have any validators to run
     if not display_validators:

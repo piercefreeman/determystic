@@ -25,6 +25,8 @@ class ProjectConfigManager(BaseConfig):
     project_name: str | None = Field(default=None, description="Name of the project")
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
+
+    exclude: list[str] = Field(default_factory=list, description="List of validators to exclude from validation")
     
     # Validator files tracking
     validators: dict[str, ValidatorFile] = Field(

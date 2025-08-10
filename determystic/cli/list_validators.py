@@ -45,7 +45,8 @@ def list_validators_command(path: Path | None):
     )
     
     table.add_column("Name", style="cyan", width=25)
-    table.add_column("Description", width=50)
+    table.add_column("Status", width=10)
+    table.add_column("Description", width=45)
     table.add_column("Files", width=20)
     table.add_column("Created", style="dim", width=12)
     
@@ -53,6 +54,10 @@ def list_validators_command(path: Path | None):
         # Determine file status - paths are relative to .determystic directory
         validator_file_path = config_path / validator_file.validator_path
         test_file_path = config_path / validator_file.test_path if validator_file.test_path else None
+        
+        # Determine validator status (active vs ignored)
+        is_excluded = validator_file.name in config_manager.exclude
+        status_text = "[yellow]Ignored[/yellow]" if is_excluded else "[green]Active[/green]"
         
         files_status = []
         if validator_file_path.exists():
@@ -73,11 +78,12 @@ def list_validators_command(path: Path | None):
         
         # Truncate description if too long
         description = validator_file.description or "[dim]No description[/dim]"
-        if len(description) > 47:
-            description = description[:44] + "..."
+        if len(description) > 42:
+            description = description[:39] + "..."
         
         table.add_row(
             validator_file.name,
+            status_text,
             description,
             files_text,
             created_date
