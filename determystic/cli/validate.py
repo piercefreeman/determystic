@@ -13,13 +13,8 @@ from rich.spinner import Spinner
 from rich.table import Table
 from rich.text import Text
 
-from determystic.configs.project import ProjectConfigManager
+from determystic.cli.common import get_active_validators, load_project_config
 from determystic.io import detect_pyproject_path
-from determystic.validators import (
-    DynamicASTValidator,
-    HangingFunctionsValidator,
-    StaticAnalysisValidator,
-)
 
 console = Console()
 
@@ -95,18 +90,9 @@ async def run_validation(path: Path, verbose: bool):
         border_style="cyan"
     ))
     
-    if path:
-        ProjectConfigManager.set_runtime_custom_path(path)
-    project_config = ProjectConfigManager.load_from_disk()
-    
-    # Get all validators using the create_validators class method pattern
-    validators = [
-        *DynamicASTValidator.create_validators(project_config),
-        *StaticAnalysisValidator.create_validators(project_config),
-        *HangingFunctionsValidator.create_validators(project_config),
-    ]
-    
-    display_validators = [v for v in validators if v.display_name not in project_config.exclude]
+    # Load project configuration and get active validators
+    project_config = load_project_config(path)
+    display_validators = get_active_validators(project_config)
     
     # Check if we have any validators to run
     if not display_validators:
@@ -119,9 +105,9 @@ async def run_validation(path: Path, verbose: bool):
     with Live(create_status_table(display_validators, results), console=console, refresh_per_second=4) as live:
         # Run validation in parallel
         tasks = []
-        for validator in validators:
+        for validator in display_validators:
             async def run_and_store(v):
-                result = await v.validate(path)
+                result = await v.validate()
                 results[v.name] = result
                 # Update the live display immediately when a validator completes
                 live.update(create_status_table(display_validators, results))
