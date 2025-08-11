@@ -77,9 +77,17 @@ Detailed Results:
 
 Programming agents are getting _really good_. You're hard pressed to find a professional engineer these days that doesn't use Cursor or Claude Code for at least some part of their workflow.
 
-My main annoyance in using these systems is when they output code that mostly works but is really messy, or against my own coding conventions. Typehinting in Python is especially egregious here. No matter how much I try to coerce my AGENT.md files, all of the SOTA models have a very strong preference to use List[] and Optional[]. I want to use the modern `list[]` and `A | None`.
+My main annoyance in using these systems is when they output code that mostly works but is really messy, or against my own coding conventions. Here are some things that I've seen:
 
-It's a small thing but it's representative of a larger problem. The main control we have over these systems today is in their system prompts: specifying a AGENT.md or .cursorrules file to try to guide their behavior over text alone. This certainly works for higher level instructions like describing a feature scope. But we lose precision over what we're looking for by having to describe programming goals and constructs in natural language instead of code. Adding in AST validation changes that - and it turns out that LLMs are actually very good at writing AST validators even though they're pretty annoying for people.
+- When in a long running loop to try and fix some tests, models will sometimes wrap test logic in a try/except in order to get it to pass
+- Models will use patch() by default over testing the underlying end to end logic
+- They'll use bare assert statements over more detailed ValueError exception subclasses
+- time.sleep() in tests to stopgap investigating race conditions, or just littered excessively 
+- Most models have a very strong preference to use List[] and Optional[]. I want to use the modern `list[]` and `A | None`.
+
+All these happen regardless of how strongly I try to coerce the system prompt. We've managed to successfully make models pretty [tenacious](https://pierce.dev/notes/the-tenacity-of-modern-llms/) in problem solving, but that doesn't help much if they're able to cheat on the given problems.
+
+The main control we have over these systems today is in their system prompts: specifying a AGENT.md or .cursorrules file to try to guide their behavior over text alone. This certainly works for higher level instructions like describing a feature scope. But we lose precision over what we're looking for by having to describe programming goals and constructs in natural language instead of code. Adding in AST validation changes that - and it turns out that LLMs are actually very good at writing AST validators even though they're pretty annoying for people.
 
 ## Default validators
 
