@@ -50,7 +50,7 @@ if __name__ == "__main__":
     main()
 ```
 
-In this case, the fact that there's an Optional typehint instead of modern Python syntax (A | None = None). We can add this as a rule:
+In this case, the fact that there's an Optional typehint instead of modern Python syntax (A | None = None). Both work but we prefer the latter. We can add this as a rule:
 
 ```bash
 Code: name: Optional[str] = None
