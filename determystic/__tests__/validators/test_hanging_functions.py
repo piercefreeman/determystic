@@ -98,6 +98,53 @@ my-script = "main:cli"
 another-script = "module.submodule:entry_point"
 '''
 
+    @pytest.fixture
+    def sample_code_with_decorated_functions(self) -> str:
+        """Sample Python code with decorated functions."""
+        return '''
+import functools
+from flask import Flask
+
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    """This function has a decorator - should be ignored."""
+    return "Home page"
+
+@app.route('/api/data')
+@functools.cache
+def get_data():
+    """This function has multiple decorators - should be ignored."""
+    return {"data": "value"}
+
+@property
+def my_property():
+    """Property decorator - should be ignored."""
+    return "property value"
+
+@staticmethod
+def static_method():
+    """Static method decorator - should be ignored."""
+    return "static"
+
+@classmethod
+def class_method(cls):
+    """Class method decorator - should be ignored."""
+    return "class method"
+
+def hanging_function():
+    """This function has no decorator and is never called - should be flagged."""
+    return "hanging"
+
+def used_function():
+    """This function has no decorator but is called."""
+    return "used"
+
+# Call the used function
+result = used_function()
+'''
+
     def test_create_validators(self, temp_project_dir: Path) -> None:
         """Test create_validators factory method."""
         # Create basic config structure
@@ -388,6 +435,33 @@ result = obj.called_method()
         assert "hanging_method" in result.output
         assert "called_method" not in result.output
         assert "__init__" not in result.output  # Dunder methods ignored
+
+    @pytest.mark.asyncio
+    async def test_validate_ignores_decorated_functions(
+        self, 
+        temp_project_dir: Path,
+        sample_code_with_decorated_functions: str
+    ) -> None:
+        """Test that decorated functions are ignored even if they're not referenced."""
+        # Create Python file with decorated functions
+        python_file = temp_project_dir / "main.py"
+        python_file.write_text(sample_code_with_decorated_functions)
+        
+        validator = HangingFunctionsValidator(path=temp_project_dir)
+        result = await validator.validate()
+        
+        # Should only find hanging_function (the one without decorators)
+        # All decorated functions should be ignored
+        assert not result.success
+        assert "hanging_function" in result.output
+        assert "home" not in result.output
+        assert "get_data" not in result.output
+        assert "my_property" not in result.output
+        assert "static_method" not in result.output
+        assert "class_method" not in result.output
+        assert "used_function" not in result.output  # This is called, so not hanging
+        # Verify only one function is reported
+        assert result.output.count("never referenced") == 1
 
     def test_display_name_property(self, temp_project_dir: Path) -> None:
         """Test that display_name property formats the name correctly."""
