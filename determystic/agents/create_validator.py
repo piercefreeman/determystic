@@ -2,7 +2,7 @@
 
 from typing import Optional, AsyncGenerator
 from pydantic_ai.messages import PartDeltaEvent, TextPartDelta
-from pydantic_ai.messages import FunctionToolCallEvent, FunctionToolResultEvent
+from pydantic_ai.messages import FunctionToolCallEvent, FunctionToolResultEvent, RetryPromptPart
 
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent, RunContext
@@ -466,9 +466,19 @@ async def stream_create_validator(
                             
                         elif isinstance(stream_event, FunctionToolResultEvent):
                             # Tool call completed
+                            is_failure = isinstance(stream_event.result, RetryPromptPart)
+                            
+                            if is_failure:
+                                # Show full output for failures (RetryPromptPart means tool failed)
+                                display_content = f"❌ Tool failed: {stream_event.result.content}"
+                            else:
+                                # Truncate successful output for readability
+                                result_content = stream_event.result.content
+                                display_content = f"✅ Tool completed: {result_content[:100]}..." if len(result_content) > 100 else f"✅ Tool completed: {result_content}"
+                            
                             event = StreamEvent(
                                 event_type='tool_call_end',
-                                content=f"✅ Tool completed: {stream_event.result.content[:100]}...",
+                                content=display_content,
                                 deps=deps
                             )
                             yield event

@@ -31,6 +31,7 @@ class FunctionDef:
     is_method: bool = False
     is_private: bool = False
     is_dunder: bool = False
+    has_decorators: bool = False
 
 
 class FunctionCallCollector(ast.NodeVisitor):
@@ -90,6 +91,7 @@ class FunctionDefinitionCollector(ast.NodeVisitor):
         is_method = len(self.class_stack) > 0
         is_private = node.name.startswith('_') and not node.name.startswith('__')
         is_dunder = node.name.startswith('__') and node.name.endswith('__')
+        has_decorators = len(node.decorator_list) > 0
         
         func_def = FunctionDef(
             name=node.name,
@@ -97,7 +99,8 @@ class FunctionDefinitionCollector(ast.NodeVisitor):
             line_number=node.lineno,
             is_method=is_method,
             is_private=is_private,
-            is_dunder=is_dunder
+            is_dunder=is_dunder,
+            has_decorators=has_decorators
         )
         self.functions.append(func_def)
 
@@ -231,6 +234,10 @@ class HangingFunctionsValidator(BaseValidator):
         for func in all_functions:
             # Skip dunder methods (like __init__, __str__, etc.)
             if func.is_dunder:
+                continue
+            
+            # Skip decorated functions (often used for registering with frameworks)
+            if func.has_decorators:
                 continue
             
             # Skip script entrypoints
