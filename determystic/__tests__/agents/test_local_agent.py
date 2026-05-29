@@ -6,6 +6,7 @@ from unittest.mock import patch
 import pytest
 
 from determystic.agents.local_agent import (
+    LocalAgentExecutionError,
     LocalAgentSelectionError,
     _build_prompt,
     create_validator_with_local_agent,
@@ -48,28 +49,18 @@ def test_read_generated_files_from_workspace(tmp_path: Path) -> None:
     (tmp_path / "validator.py").write_text("from determystic.external import DeterministicTraverser\n")
     (tmp_path / "test_validator.py").write_text("def test_validator():\n    assert True\n")
 
-    validator, tests = _read_generated_files(tmp_path, "")
+    validator, tests = _read_generated_files(tmp_path)
 
     assert "DeterministicTraverser" in validator
     assert "def test_validator" in tests
 
 
-def test_read_generated_files_from_fenced_fallback(tmp_path: Path) -> None:
-    """Fallback fenced blocks should be accepted when file writes are unavailable."""
-    output = """
-```validator.py
-from determystic.external import DeterministicTraverser
-```
-```test_validator.py
-def test_validator():
-    assert True
-```
-"""
+def test_read_generated_files_requires_workspace_files(tmp_path: Path) -> None:
+    """Local agents must write both generated files to the temporary workspace."""
+    (tmp_path / "validator.py").write_text("from determystic.external import DeterministicTraverser\n")
 
-    validator, tests = _read_generated_files(tmp_path, output)
-
-    assert "DeterministicTraverser" in validator
-    assert "def test_validator" in tests
+    with pytest.raises(LocalAgentExecutionError, match="test_validator.py"):
+        _read_generated_files(tmp_path)
 
 
 def test_build_prompt_uses_local_cli_instructions() -> None:
@@ -83,6 +74,7 @@ def test_build_prompt_uses_local_cli_instructions() -> None:
 
     assert "Create exactly these two files" in prompt
     assert "Ensure the tests are executable by pytest" in prompt
+    assert "fallback fenced blocks" not in prompt
     assert "read_external_file" not in prompt
     assert "Run the tests to ensure everything works correctly" not in prompt
     assert "tests failed" in prompt

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import re
 import shutil
 import subprocess
 import tempfile
@@ -37,14 +36,6 @@ Create exactly these two files in the current directory:
 
 Do not modify any other files. The caller will read these files and run them in an isolated
 determystic test environment after your command exits.
-
-If file editing is unavailable, include fallback fenced blocks in your final answer:
-```validator.py
-<validator contents>
-```
-```test_validator.py
-<test contents>
-```
 
 The current `determystic.external` interface is:
 ```python
@@ -183,41 +174,12 @@ def _build_agent_command(agent_name: LocalAgentName, workdir: Path, output_path:
     ]
 
 
-def _extract_fenced_file(output: str, filename: str) -> str | None:
-    exact_pattern = rf"```{re.escape(filename)}\s*\n(.*?)```"
-    exact_matches = re.findall(exact_pattern, output, flags=re.DOTALL | re.IGNORECASE)
-    if exact_matches:
-        return exact_matches[0].strip()
-
-    generic_pattern = r"```python\s*\n(.*?)```"
-    matches = re.findall(generic_pattern, output, flags=re.DOTALL | re.IGNORECASE)
-    if not matches:
-        return None
-
-    if len(matches) == 1:
-        return matches[0].strip()
-
-    lowered = filename.lower()
-    for match in matches:
-        if lowered == "validator.py" and "DeterministicTraverser" in match:
-            return match.strip()
-        if lowered == "test_validator.py" and "def test_" in match:
-            return match.strip()
-
-    return matches[0].strip()
-
-
-def _read_generated_files(workdir: Path, agent_output: str) -> tuple[str, str]:
+def _read_generated_files(workdir: Path) -> tuple[str, str]:
     validator_path = workdir / "validator.py"
     tests_path = workdir / "test_validator.py"
 
     validation_contents = validator_path.read_text() if validator_path.exists() else ""
     test_contents = tests_path.read_text() if tests_path.exists() else ""
-
-    if not validation_contents:
-        validation_contents = _extract_fenced_file(agent_output, "validator.py") or ""
-    if not test_contents:
-        test_contents = _extract_fenced_file(agent_output, "test_validator.py") or ""
 
     if not validation_contents or not test_contents:
         missing = []
@@ -258,7 +220,7 @@ def _run_agent_once(
             f"{agent_name} exited with code {completed.returncode}.\n\n{output.strip()}"
         )
 
-    validation_contents, test_contents = _read_generated_files(workdir, output)
+    validation_contents, test_contents = _read_generated_files(workdir)
     return output.strip(), validation_contents, test_contents
 
 
