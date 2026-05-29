@@ -47,16 +47,12 @@ class ProjectSettings(BaseModel):
     @field_validator("validator_agent", mode="before")
     @classmethod
     def normalize_validator_agent(cls, value: Any) -> Any:
-        """Normalize and validate the configured local agent preference."""
+        """Normalize the configured local agent preference before Literal validation."""
         if value is None or value == "":
             return "auto"
-        if not isinstance(value, str):
-            raise ValueError("validator_agent must be one of: auto, codex, claude")
-
-        normalized = value.strip().lower()
-        if normalized not in {"auto", "codex", "claude"}:
-            raise ValueError("validator_agent must be one of: auto, codex, claude")
-        return normalized
+        if isinstance(value, str):
+            return value.strip().lower()
+        return value
 
 
 class ProjectConfigManager(BaseConfig):

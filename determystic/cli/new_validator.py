@@ -19,7 +19,6 @@ from prompt_toolkit.patch_stdout import patch_stdout
 from determystic.configs.project import ProjectConfigManager
 from determystic.agents.create_validator import StreamEvent
 from determystic.agents.local_agent import (
-    LocalAgentExecutionError,
     LocalAgentSelectionError,
     select_local_agent,
     stream_create_validator_with_local_agent,
@@ -161,7 +160,7 @@ async def new_validator_command(path: Path | None):
         console.print(f"[dim]Formatted validator name: {validator_name}[/dim]")
     
     # Check if validator already exists
-    existing_validators = list(config_manager.validators.values())  # type: ignore
+    existing_validators = list(config_manager.validators.values())
     if any(v.name == validator_name for v in existing_validators):
         if not Prompt.ask(f"\n[yellow]Validator '{validator_name}' already exists. Overwrite?[/yellow]", choices=["y", "n"], default="n") == "y":
             console.print("[red]Operation cancelled.[/red]")
@@ -181,43 +180,38 @@ async def new_validator_command(path: Path | None):
     console.print(f"\n[bold cyan]🤖 Starting AST Validator Agent ({selected_agent})...[/bold cyan]")
     console.print("[dim]This may take a few moments as the agent creates and tests the validator.[/dim]\n")
     
-    # Save current working directory
     final_event: StreamEvent | None = None
-    try:
-        async for event in stream_create_validator_with_local_agent(
-            user_code=code_snippet,
-            requirements=issue_description,
-            agent_name=selected_agent,
-        ):
-            if event.event_type == 'user_prompt':
-                console.print(f"[bold blue]📝 {event.content}[/bold blue]")
-            elif event.event_type == 'model_request_start':
-                console.print(f"[bold yellow]{event.content}[/bold yellow]")
-            elif event.event_type == 'text_chunk':
-                # Print text chunks as they arrive
-                console.print(event.content, end="", style="white")
-            elif event.event_type == 'tool_processing_start':
-                console.print(f"\n[bold cyan]{event.content}[/bold cyan]")
-            elif event.event_type == 'tool_call_start':
-                console.print(f"[cyan]🔧 Calling {event.content}[/cyan]")
-            elif event.event_type == 'tool_call_end':
-                console.print(f"[green]{event.content}[/green]")
-            elif event.event_type == 'final_result':
-                console.print(f"\n[bold green]{event.content}[/bold green]")
-                final_event = event
-    except LocalAgentExecutionError as e:
-        console.print(f"\n[red]Error: {e}[/red]")
-        sys.exit(1)
+    async for event in stream_create_validator_with_local_agent(
+        user_code=code_snippet,
+        requirements=issue_description,
+        agent_name=selected_agent,
+    ):
+        if event.event_type == 'user_prompt':
+            console.print(f"[bold blue]📝 {event.content}[/bold blue]")
+        elif event.event_type == 'model_request_start':
+            console.print(f"[bold yellow]{event.content}[/bold yellow]")
+        elif event.event_type == 'text_chunk':
+            # Print text chunks as they arrive
+            console.print(event.content, end="", style="white")
+        elif event.event_type == 'tool_processing_start':
+            console.print(f"\n[bold cyan]{event.content}[/bold cyan]")
+        elif event.event_type == 'tool_call_start':
+            console.print(f"[cyan]🔧 Calling {event.content}[/cyan]")
+        elif event.event_type == 'tool_call_end':
+            console.print(f"[green]{event.content}[/green]")
+        elif event.event_type == 'final_result':
+            console.print(f"\n[bold green]{event.content}[/bold green]")
+            final_event = event
 
     if not final_event:
         console.print("\n[red]Error: No final event received from the agent.[/red]")
         sys.exit(1)
     
     console.print("\n[bold green]✅ Agent completed successfully![/bold green]")
-    console.print(Panel(final_event.content, title="Final Result", border_style="green"))  # type: ignore
+    console.print(Panel(final_event.content, title="Final Result", border_style="green"))
     
-    validation_contents = final_event.deps.validation_contents  # type: ignore
-    test_contents = final_event.deps.test_contents  # type: ignore
+    validation_contents = final_event.deps.validation_contents
+    test_contents = final_event.deps.test_contents
     
     # Process generated files from agent virtual contents
     if validation_contents or test_contents:
@@ -231,7 +225,7 @@ async def new_validator_command(path: Path | None):
         # Save validator files and track them in pyproject.toml
         if validation_contents:
             try:
-                validator_file = config_manager.new_validation(  # type: ignore
+                validator_file = config_manager.new_validation(
                     name=validator_name,
                     validator_script=validation_contents,
                     test_script=test_contents or "",
@@ -239,7 +233,7 @@ async def new_validator_command(path: Path | None):
                 )
                 
                 # Save the config to disk
-                config_manager.save_to_disk()  # type: ignore
+                config_manager.save_to_disk()
                 
                 console.print("\n[bold green]✅ Validator saved successfully![/bold green]")
                 console.print(f"  • Validator: {validator_file.validator_path}")

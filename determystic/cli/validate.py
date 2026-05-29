@@ -164,4 +164,4 @@ async def run_validation(path: Path, verbose: bool):
     
     # Set exit code based on results
     if not all_passed:
-        sys.exit(1)  # type: ignore
+        sys.exit(1)

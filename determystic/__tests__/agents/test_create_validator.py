@@ -1,11 +1,22 @@
 """Tests for the create_validator agent."""
 
+from typing import cast
 from unittest.mock import patch
 
 import pytest
+from pydantic_ai import RunContext
 from pydantic_ai.models.test import TestModel
 
-from determystic.agents.create_validator import create_ast_validator, stream_create_validator
+from determystic.agents.create_validator import (
+    AgentDependencies,
+    EditFileInput,
+    FinalizeInput,
+    ReadFileInput,
+    RunTestsInput,
+    WriteFileInput,
+    create_ast_validator,
+    stream_create_validator,
+)
 
 
 # Test responses that the mock model will return
@@ -203,7 +214,6 @@ class TestCreateValidator:
     async def test_real_tool_integration_end_to_end(self):
         """Test that our tools work end-to-end with realistic agent behavior."""
         from determystic.agents.create_validator import (
-            AgentDependencies, 
             write_file, read_file, edit_file, run_tests, finalize
         )
         
@@ -215,7 +225,7 @@ class TestCreateValidator:
             def __init__(self, deps):
                 self.deps = deps
         
-        ctx = MockRunContext(deps)
+        ctx = cast(RunContext[AgentDependencies], MockRunContext(deps))
         
         # Test 1: Write validator file
         validator_code = '''"""AST validator for detecting exceptions in test functions."""
@@ -240,10 +250,10 @@ class TestExceptionTraverser(DeterministicTraverser):
         self.generic_visit(node)
 '''
         
-        write_result = await write_file(ctx, type('WriteFileInput', (), {
-            'filename': 'validator.py',
-            'content': validator_code
-        })())
+        write_result = await write_file(
+            ctx,
+            WriteFileInput(filename='validator.py', content=validator_code),
+        )
         
         assert "✅ File 'validator.py' written" in write_result
         assert len(deps.files) == 1
@@ -305,30 +315,31 @@ def test_clean_function():
     assert len(traverser.errors) == 0
 '''
         
-        test_result = await write_file(ctx, type('WriteFileInput', (), {
-            'filename': 'test_validator.py', 
-            'content': test_code
-        })())
+        test_result = await write_file(
+            ctx,
+            WriteFileInput(filename='test_validator.py', content=test_code),
+        )
         
         assert "✅ File 'test_validator.py' written" in test_result
         assert len(deps.files) == 2
         assert 'test_validator.py' in deps.files
         
         # Test 3: Read files back
-        read_result = await read_file(ctx, type('ReadFileInput', (), {
-            'filename': 'validator.py'
-        })())
+        read_result = await read_file(ctx, ReadFileInput(filename='validator.py'))
         
         assert "📄 Contents of 'validator.py'" in read_result
         assert "TestExceptionTraverser" in read_result
         
         # Test 4: Edit a file (use a more specific string to avoid multiple matches)
-        edit_result = await edit_file(ctx, type('EditFileInput', (), {
-            'filename': 'validator.py',
-            'old_str': 'class TestExceptionTraverser(DeterministicTraverser):',
-            'new_str': 'class TestExceptionTraverser(DeterministicTraverser):',
-            'target_all': False
-        })())
+        edit_result = await edit_file(
+            ctx,
+            EditFileInput(
+                filename='validator.py',
+                old_str='class TestExceptionTraverser(DeterministicTraverser):',
+                new_str='class TestExceptionTraverser(DeterministicTraverser):',
+                target_all=False,
+            ),
+        )
         
         assert "✅ Replaced 1 occurrence(s)" in edit_result
         
@@ -337,9 +348,10 @@ def test_clean_function():
             mock_env_instance = mock_env.return_value.__enter__.return_value
             mock_env_instance.run_tests.return_value = (True, "All tests passed")
             
-            test_run_result = await run_tests(ctx, type('RunTestsInput', (), {
-                'message': 'Testing our validator'
-            })())
+            test_run_result = await run_tests(
+                ctx,
+                RunTestsInput(message='Testing our validator'),
+            )
             
             assert "✅ Tests passed!" in test_run_result
             mock_env_instance.run_tests.assert_called_once_with(
@@ -348,9 +360,10 @@ def test_clean_function():
             )
         
         # Test 6: Finalize
-        final_result = await finalize(ctx, type('FinalizeInput', (), {
-            'message': 'Successfully created test exception validator'
-        })())
+        final_result = await finalize(
+            ctx,
+            FinalizeInput(message='Successfully created test exception validator'),
+        )
         
         assert "🎉 Implementation complete!" in final_result
         assert "Successfully created test exception validator" in final_result
