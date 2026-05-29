@@ -226,7 +226,7 @@ async def new_validator_command(path: Path | None):
         if test_contents:
             console.print("  • Generated test code")
         
-        # Save files to .determystic structure using config manager
+        # Save validator files and track them in pyproject.toml
         if validation_contents:
             try:
                 validator_file = config_manager.new_validation(  # type: ignore

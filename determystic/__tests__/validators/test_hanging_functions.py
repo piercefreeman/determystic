@@ -147,14 +147,13 @@ result = used_function()
 
     def test_create_validators(self, temp_project_dir: Path) -> None:
         """Test create_validators factory method."""
-        # Create basic config structure
-        config_dir = temp_project_dir / ".determystic"
-        config_dir.mkdir(exist_ok=True)
-        config_path = config_dir / "config.toml"
+        # Create basic pyproject config structure
+        config_path = temp_project_dir / "pyproject.toml"
         config_path.write_text('''
+[tool.determystic]
 version = "1.0"
-[validators]
-[settings]
+[tool.determystic.validators]
+[tool.determystic.settings]
 ''')
 
         # Reset and set runtime path and load config manager

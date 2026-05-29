@@ -28,8 +28,7 @@ class DynamicASTValidator(BaseValidator):
 
         # Load each validator file as a separate validator instance
         for validator_file in config_manager.validators.values():
-            # The validator_path is relative to the .determystic directory, not the project root
-            validator_path = config_manager.project_root / ".determystic" / validator_file.validator_path
+            validator_path = config_manager.resolve_project_path(validator_file.validator_path)
             
             # Create a DynamicASTValidator for this specific validator
             validator = cls(
