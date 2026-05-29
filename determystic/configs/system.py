@@ -58,4 +58,4 @@ class DeterministicSettings(BaseConfig):
                 "[bold cyan]determystic configure[/bold cyan]",
                 border_style="red"
             ))
-            sys.exit(1)  # type: ignore
+            sys.exit(1)

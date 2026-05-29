@@ -10,7 +10,7 @@ from unittest.mock import patch
 import pytest
 from pydantic import ValidationError
 
-from determystic.configs.project import ProjectConfigManager, ValidatorFile
+from determystic.configs.project import ProjectConfigManager, ProjectSettings, ValidatorFile
 
 
 @pytest.fixture(autouse=True)
@@ -313,6 +313,7 @@ exclude = ["Static Analysis"]
 
 [tool.determystic.settings]
 debug = true
+validator_agent = "Codex"
 """)
 
             with patch.object(ProjectConfigManager, 'get_possible_config_paths', return_value=[config_file]):
@@ -321,7 +322,15 @@ debug = true
                 assert config.version == "2.0"
                 assert config.project_name == "configured_project"
                 assert config.exclude == ["Static Analysis"]
-                assert config.settings == {"debug": True}
+                assert config.settings.validator_agent == "codex"
+                assert config.settings.model_extra == {"debug": True}
+
+    def test_project_settings_accepts_legacy_agent_alias(self) -> None:
+        """Test loading the old agent key into the typed validator_agent setting."""
+        settings = ProjectSettings.model_validate({"agent": " claude ", "debug": True})
+
+        assert settings.validator_agent == "claude"
+        assert settings.model_extra == {"debug": True}
 
     def test_save_to_pyproject_preserves_existing_sections(self) -> None:
         """Test saving config under [tool.determystic] without dropping pyproject metadata."""
