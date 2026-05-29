@@ -138,6 +138,41 @@ ignore_paths = [
 
 Directory entries ignore everything below that directory. Glob-style entries are also supported.
 
+### Per-Validator Configuration
+
+Validators can declare an optional Pydantic `BaseModel` config schema. Project config for that validator lives under its isolated validator section:
+
+```toml
+# pyproject.toml
+[tool.determystic.validators.my_custom_validator]
+name = "my_custom_validator"
+validator_path = ".determystic/validations/my_custom_validator.determystic"
+
+[tool.determystic.validators.my_custom_validator.config]
+forbidden_name = "debug_only"
+```
+
+Custom validator traversers expose that schema with `config_model` and accept `config` in `__init__`:
+
+```python
+from pydantic import BaseModel
+from determystic.external import DeterministicTraverser
+
+
+class MyValidatorConfig(BaseModel):
+    forbidden_name: str = "debug"
+
+
+class MyValidator(DeterministicTraverser):
+    config_model = MyValidatorConfig
+
+    def __init__(self, code, filename="<string>", config=None):
+        super().__init__(code, filename, config=config)
+        self.typed_config = config or MyValidatorConfig()
+```
+
+The same `[tool.determystic.validators.<name>.config]` convention is available to bundled validators that declare a config model.
+
 ### Excluding Validators
 
 Custom validators are active by default. To disable a custom validator or override an enabled bundled validator, add it to the `exclude` list:

@@ -2,7 +2,7 @@
 
 import tomllib
 from datetime import datetime
-from typing import Any, ClassVar, Literal
+from typing import Any, ClassVar, Literal, TypeVar
 from pathlib import Path
 
 import tomli_w
@@ -11,6 +11,15 @@ from determystic.configs.base import BaseConfig
 from determystic.io import detect_git_root, detect_pyproject_path
 
 ValidatorAgentPreference = Literal["auto", "codex", "claude"]
+ConfigModelT = TypeVar("ConfigModelT", bound=BaseModel)
+VALIDATOR_METADATA_FIELDS = {
+    "name",
+    "validator_path",
+    "test_path",
+    "created_at",
+    "description",
+    "config",
+}
 
 
 class ValidatorFile(BaseModel):
@@ -20,6 +29,10 @@ class ValidatorFile(BaseModel):
     test_path: str | None = Field(default=None, description="Relative path to the test file")
     created_at: datetime = Field(default_factory=datetime.now)
     description: str | None = Field(default=None, description="Description of what this validator checks")
+    config: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Validator-specific configuration payload.",
+    )
 
 
 class ProjectSettings(BaseModel):
@@ -80,6 +93,11 @@ class ProjectConfigManager(BaseConfig):
         default_factory=dict,
         description="Map of validator names to their file information"
     )
+    validator_configs: dict[str, dict[str, Any]] = Field(
+        default_factory=dict,
+        exclude=True,
+        description="Internal map of validator names to typed configuration payloads.",
+    )
     
     # Project settings
     settings: ProjectSettings = Field(
@@ -91,14 +109,58 @@ class ProjectConfigManager(BaseConfig):
 
     @model_validator(mode="before")
     @classmethod
-    def migrate_ignore_paths_alias(cls, data: Any) -> Any:
-        """Accept the descriptive `ignored_paths` alias for `ignore_paths`."""
+    def migrate_project_config(cls, data: Any) -> Any:
+        """Normalize project config aliases and split validator metadata from config."""
         if not isinstance(data, dict):
             return data
 
         values = dict(data)
         if "ignore_paths" not in values and "ignored_paths" in values:
             values["ignore_paths"] = values.pop("ignored_paths")
+        values = cls._split_validator_config_sections(values)
+        return values
+
+    @staticmethod
+    def _split_validator_config_sections(values: dict[str, Any]) -> dict[str, Any]:
+        raw_validators = values.get("validators")
+        if not isinstance(raw_validators, dict):
+            return values
+
+        custom_validators: dict[str, Any] = {}
+        validator_configs = dict(values.get("validator_configs", {}))
+
+        for validator_name, raw_entry in raw_validators.items():
+            if not isinstance(raw_entry, dict):
+                custom_validators[validator_name] = raw_entry
+                continue
+
+            entry = dict(raw_entry)
+            nested_config = entry.get("config", {})
+            if not isinstance(nested_config, dict):
+                nested_config = {}
+
+            direct_config = {
+                key: value
+                for key, value in entry.items()
+                if key not in VALIDATOR_METADATA_FIELDS
+            }
+            combined_config = {**direct_config, **nested_config}
+            if combined_config:
+                validator_configs[validator_name] = combined_config
+
+            if "validator_path" not in entry:
+                continue
+
+            custom_validators[validator_name] = {
+                key: value
+                for key, value in entry.items()
+                if key in VALIDATOR_METADATA_FIELDS
+            }
+            if combined_config:
+                custom_validators[validator_name]["config"] = combined_config
+
+        values["validators"] = custom_validators
+        values["validator_configs"] = validator_configs
         return values
 
     @classmethod
@@ -167,7 +229,22 @@ class ProjectConfigManager(BaseConfig):
                 pyproject_data = tomllib.load(f)
 
         tool_data = pyproject_data.setdefault("tool", {})
-        tool_data[self.TOOL_SECTION] = self.model_dump(mode="json", exclude_none=True)
+        determystic_data = self.model_dump(
+            mode="json",
+            exclude_none=True,
+            exclude={"validator_configs"},
+        )
+        validators_data = dict(determystic_data.get("validators", {}))
+        for validator_name, validator_config in self.validator_configs.items():
+            if not validator_config:
+                continue
+            validator_data = dict(validators_data.get(validator_name, {}))
+            validator_data["config"] = validator_config
+            validators_data[validator_name] = validator_data
+        if validators_data:
+            determystic_data["validators"] = validators_data
+
+        tool_data[self.TOOL_SECTION] = determystic_data
 
         with config_path.open("wb") as f:
             tomli_w.dump(pyproject_data, f)
@@ -232,9 +309,25 @@ class ProjectConfigManager(BaseConfig):
             return path
         return self.project_root / path
 
+    def get_validator_config(
+        self,
+        name: str,
+        config_model: type[ConfigModelT],
+    ) -> ConfigModelT:
+        """Validate project config for a validator against a Pydantic model."""
+        return config_model.model_validate(self._get_validator_config_data(name))
+
     @property
     def project_root(self) -> Path:
         """
         Get the project root.
         """
         return self.get_config_path().parent
+
+    def _get_validator_config_data(self, name: str) -> dict[str, Any]:
+        """Return raw per-validator configuration for a validator name."""
+        config_data = dict(self.validator_configs.get(name, {}))
+        validator_file = self.validators.get(name)
+        if validator_file is not None:
+            config_data.update(validator_file.config)
+        return config_data

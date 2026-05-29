@@ -316,6 +316,12 @@ ignore_paths = ["generated/", "vendor/client.py"]
 [tool.determystic.settings]
 debug = true
 validator_agent = "Codex"
+
+[tool.determystic.validators.exception_coverage.config]
+strict = true
+
+[tool.determystic.validators.hanging_functions]
+allowed_names = ["framework_hook"]
 """)
 
             with patch.object(ProjectConfigManager, 'get_possible_config_paths', return_value=[config_file]):
@@ -328,6 +334,11 @@ validator_agent = "Codex"
                 assert config.ignore_paths == ["generated/", "vendor/client.py"]
                 assert config.settings.validator_agent == "codex"
                 assert config.settings.model_extra == {"debug": True}
+                assert config.validators == {}
+                assert config._get_validator_config_data("exception_coverage") == {"strict": True}
+                assert config._get_validator_config_data("hanging_functions") == {
+                    "allowed_names": ["framework_hook"]
+                }
 
     def test_load_from_pyproject_accepts_ignored_paths_alias(self) -> None:
         """The older descriptive ignored_paths key maps to ignore_paths."""
@@ -336,6 +347,75 @@ validator_agent = "Codex"
         )
 
         assert config.ignore_paths == ["generated/"]
+
+    def test_validator_config_model_validation(self) -> None:
+        """Validator config payloads can be validated against caller-provided models."""
+        from pydantic import BaseModel
+
+        class ExampleConfig(BaseModel):
+            threshold: int = 3
+
+        config = ProjectConfigManager.model_validate(
+            {
+                "validators": {
+                    "example": {
+                        "config": {
+                            "threshold": 5,
+                        }
+                    }
+                }
+            }
+        )
+
+        validator_config = config.get_validator_config("example", ExampleConfig)
+
+        assert validator_config.threshold == 5
+
+    def test_custom_validator_config_is_preserved_with_metadata(self) -> None:
+        """Custom validator metadata can carry an isolated config payload."""
+        config = ProjectConfigManager.model_validate(
+            {
+                "validators": {
+                    "custom": {
+                        "name": "custom",
+                        "validator_path": ".determystic/validations/custom.determystic",
+                        "config": {
+                            "forbidden_name": "bad_pattern",
+                        },
+                    }
+                }
+            }
+        )
+
+        assert set(config.validators) == {"custom"}
+        assert config.validators["custom"].config == {"forbidden_name": "bad_pattern"}
+        assert config._get_validator_config_data("custom") == {
+            "forbidden_name": "bad_pattern"
+        }
+
+    def test_save_to_pyproject_serializes_validator_configs_under_validator_sections(self) -> None:
+        """Config-only validator payloads are written under tool.determystic.validators."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            config_file = temp_path / "pyproject.toml"
+            config_file.write_text("")
+
+            with patch.object(ProjectConfigManager, 'get_possible_config_paths', return_value=[config_file]):
+                config = ProjectConfigManager(
+                    validator_configs={
+                        "exception_coverage": {
+                            "strict": True,
+                        }
+                    }
+                )
+                config.save_to_disk()
+
+                with config_file.open("rb") as f:
+                    saved_data = tomllib.load(f)
+
+        assert saved_data["tool"]["determystic"]["validators"]["exception_coverage"]["config"] == {
+            "strict": True
+        }
 
     def test_project_settings_accepts_legacy_agent_alias(self) -> None:
         """Test loading the old agent key into the typed validator_agent setting."""
