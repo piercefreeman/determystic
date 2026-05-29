@@ -8,6 +8,7 @@ import pytest
 from determystic.agents.local_agent import (
     LocalAgentExecutionError,
     LocalAgentSelectionError,
+    _external_interface,
     _build_prompt,
     _create_validator_with_local_agent,
     select_local_agent,
@@ -78,6 +79,13 @@ def test_build_prompt_uses_local_cli_instructions() -> None:
     assert "read_external_file" not in prompt
     assert "Run the tests to ensure everything works correctly" not in prompt
     assert "tests failed" in prompt
+
+
+# determystic: tested-exceptions[determystic.agents.local_agent._external_interface: OSError]
+def test_external_interface_handles_read_errors() -> None:
+    """The prompt builder can tolerate a missing external interface file."""
+    with patch("pathlib.Path.read_text", side_effect=OSError("missing")):
+        assert _external_interface() == ""
 
 
 def test_create_validator_with_local_agent_retries_failed_tests() -> None:

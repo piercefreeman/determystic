@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 from determystic.configs.project import ProjectConfigManager
 from determystic.validators import (
     DynamicASTValidator,
+    ExceptionCoverageValidator,
     FunctionVisibilityValidator,
     HangingFunctionsValidator,
     StaticAnalysisValidator,
@@ -17,6 +18,7 @@ BUNDLED_VALIDATOR_NAMES = {
     "static_analysis",
     "hanging_functions",
     "function_visibility",
+    "exception_coverage",
 }
 
 
@@ -57,6 +59,7 @@ def create_all_validators(project_config: ProjectConfigManager) -> list["BaseVal
         *StaticAnalysisValidator.create_validators(project_config),
         *HangingFunctionsValidator.create_validators(project_config),
         *FunctionVisibilityValidator.create_validators(project_config),
+        *ExceptionCoverageValidator.create_validators(project_config),
     ]
     
     return validators

@@ -112,6 +112,8 @@ def list_validators_command(path: Path | None):
                 description = "Detect unused definitions and unreachable code"
             elif "function_visibility" in validator.name:
                 description = "Enforce public-before-private function layout"
+            elif "exception_coverage" in validator.name:
+                description = "Require test markers for except handlers"
             else:
                 description = f"Built-in {validator.display_name} validator"
         

@@ -1,6 +1,8 @@
 """Tests for shared determystic suppression comments."""
 
 import ast
+import tokenize
+from unittest.mock import patch
 
 from determystic.suppressions import SuppressionComments
 
@@ -65,3 +67,23 @@ def test_used_suppression_is_limited_to_unused_findings() -> None:
 
     assert suppressions.suppresses(1, "unused-function")
     assert not suppressions.suppresses(1, "function-order")
+
+
+# determystic: tested-exceptions[determystic.suppressions.SuppressionComments.from_source: SyntaxError]
+def test_from_source_handles_syntax_errors_when_building_definition_ranges() -> None:
+    """Invalid source should still produce an empty suppression lookup."""
+    suppressions = SuppressionComments.from_source("def broken(:\n")
+
+    assert not suppressions.suppresses(1, "unused-function")
+
+
+# determystic: tested-exceptions[determystic.suppressions.SuppressionComments._parse_source_comments: TokenError]
+def test_parse_source_comments_handles_tokenize_errors() -> None:
+    """Tokenization errors should leave the suppression lookup empty."""
+    with patch(
+        "determystic.suppressions.tokenize.generate_tokens",
+        side_effect=tokenize.TokenError("bad token", (1, 1)),
+    ):
+        suppressions = SuppressionComments.from_source("value = 1")
+
+    assert not suppressions.suppresses(1, "unused-function")

@@ -222,6 +222,7 @@ validator_path = ".determystic/validations/missing.determystic"
         # Should return empty list since file doesn't exist
         assert len(validators) == 0
 
+    # determystic: tested-exceptions[determystic.validators.dynamic_ast.DynamicASTValidator._load_validator_module: Exception]
     def test_load_validator_module_invalid_syntax(self, temp_project_dir: Path) -> None:
         """Test loading a validator module with invalid Python syntax."""
         # Create validator file with invalid syntax
@@ -334,6 +335,32 @@ class NotATraverser:
         # Should pass validation
         assert result.success
         assert "No issues found" in result.output
+
+    # determystic: tested-exceptions[determystic.validators.dynamic_ast.DynamicASTValidator.validate: Exception]
+    @pytest.mark.asyncio
+    async def test_validate_reports_traverser_runtime_errors(
+        self,
+        temp_project_dir: Path,
+    ) -> None:
+        """Per-file traverser errors are reported without aborting validation."""
+        python_file = temp_project_dir / "code.py"
+        python_file.write_text("value = 1")
+
+        class ExplodingTraverser(DeterministicTraverser):
+            def __init__(self, code: str) -> None:
+                raise RuntimeError("boom")
+
+        validator = DynamicASTValidator(
+            name="test_validator",
+            validator_path=Path("dummy"),
+            path=temp_project_dir,
+        )
+        validator.traverser_class = ExplodingTraverser
+
+        result = await validator.validate()
+
+        assert not result.success
+        assert "code.py: Error: boom" in result.output
 
     @pytest.mark.asyncio
     async def test_validate_respects_suppression_comments(

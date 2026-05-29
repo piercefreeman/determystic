@@ -284,6 +284,33 @@ class TestSaveToDisk:
                 assert saved_data["version"] == "2.0.0"
                 assert saved_data != initial_data
 
+    # determystic: tested-exceptions[determystic.configs.base.BaseConfig.save_to_disk: FileNotFoundError]
+    def test_save_to_disk_uses_first_possible_path_when_config_path_is_missing(self) -> None:
+        """save_to_disk falls back to the first possible path if discovery fails."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            fallback_path = temp_path / "fallback" / "test_config.toml"
+            config = ConcreteTestConfig(name="fallback")
+
+            with (
+                patch.object(
+                    ConcreteTestConfig,
+                    "get_config_path",
+                    side_effect=FileNotFoundError("missing"),
+                ),
+                patch.object(
+                    ConcreteTestConfig,
+                    "get_possible_config_paths",
+                    return_value=[fallback_path],
+                ),
+            ):
+                config.save_to_disk()
+
+            with fallback_path.open("rb") as f:
+                saved_data = tomllib.load(f)
+
+            assert saved_data["name"] == "fallback"
+
     @pytest.mark.parametrize("config_data", [
         {"name": "test", "version": "1.0.0"},
         {"name": "complex", "version": "1.2.3-alpha+build.1"},

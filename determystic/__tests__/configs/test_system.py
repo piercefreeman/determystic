@@ -82,6 +82,7 @@ class TestDeterministicSettingsClassMethods:
                 assert isinstance(config, DeterministicSettings)
                 assert config.anthropic_api_key == expected_api_key
 
+    # determystic: tested-exceptions[determystic.configs.system.DeterministicSettings.load_from_disk: Exception]
     @pytest.mark.parametrize("exception_type,exception_message", [
         (FileNotFoundError, "Config file not found"),
         (ValueError, "Invalid TOML"),

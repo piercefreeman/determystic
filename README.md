@@ -99,6 +99,7 @@ Determystic includes bundled validators that can replace parts of a conventional
 | `static_analysis` | **Static Analysis** | Code formatting, style conventions, and type checking | `ruff` + `ty` |
 | `hanging_functions` | **Hanging Functions** | Detects unused functions, methods, classes, arguments, and unreachable code | AST analysis |
 | `function_visibility` | **Function Visibility** | Requires externally used functions/methods before private helpers, and internal helpers to use `_` prefixes | Project import graph + AST analysis |
+| `exception_coverage` | **Exception Coverage** | Requires every production `except` handler to be marked as covered by a test function | Test comment markers + AST analysis |
 | `dynamic_ast` | **Dynamic AST** | Loads and runs custom validators from `.determystic` files | Custom AST traversers |
 
 ## Configuration
@@ -154,6 +155,18 @@ def framework_registered_helper():
 Line comments apply to that line and the next line. Comments on or immediately above a function/class definition apply to that whole definition. `ignore-start[...]` and `ignore-end[...]` suppress a block.
 
 Supported codes include `unused-function`, `unused-method`, `unused-class`, `unused-argument`, `unreachable-code`, `dead-code`, `private-prefix`, `function-order`, and `function-visibility`. Custom validators can also be suppressed by validator name.
+
+### Exception Coverage Markers
+
+The `exception_coverage` bundled validator does not require comments in production code. Instead, add a marker immediately above the test function, or above that test function's decorators, naming the production function and the handled exception types that test covers:
+
+```python
+# determystic: tested-exceptions[my_package.service.load_config: FileNotFoundError, ValueError]
+def test_load_config_handles_missing_or_invalid_file():
+    ...
+```
+
+Use the fully qualified production target, including class names for methods, such as `my_package.worker.Runner.execute`. Exception names may be written as `ValueError` or `module.ValueError`.
 
 ### Agent Selection
 

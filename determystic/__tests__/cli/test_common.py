@@ -53,6 +53,7 @@ def test_enabled_accepts_display_names_and_wildcard() -> None:
         "static_analysis",
         "hanging_functions",
         "function_visibility",
+        "exception_coverage",
     ]
 
 
