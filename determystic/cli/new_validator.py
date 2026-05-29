@@ -4,8 +4,6 @@ import sys
 from pathlib import Path
 import re
 from random import randint
-from pydantic_ai.models.anthropic import AnthropicModel
-from pydantic_ai.providers.anthropic import AnthropicProvider
 
 import click
 from rich.console import Console
@@ -19,8 +17,14 @@ from pygments.lexers import PythonLexer # type: ignore
 from prompt_toolkit.patch_stdout import patch_stdout
 
 from determystic.configs.project import ProjectConfigManager
-from determystic.configs.system import DeterministicSettings
-from determystic.agents.create_validator import stream_create_validator, StreamEvent
+from determystic.agents.create_validator import StreamEvent
+from determystic.agents.local_agent import (
+    LocalAgentExecutionError,
+    LocalAgentSelectionError,
+    get_local_agent_preference,
+    select_local_agent,
+    stream_create_validator_with_local_agent,
+)
 from determystic.io import async_to_sync
 
 console = Console()
@@ -117,17 +121,17 @@ def format_validator_name(raw_validator_name: str) -> str:
 @async_to_sync
 async def new_validator_command(path: Path | None):
     """Run the interactive validator creation workflow."""
-
-    # Try to load the system config before we kick off
-    settings = DeterministicSettings.load_from_disk()
-    if not settings.anthropic_api_key:
-        console.print("[red]Anthropic API key not found. Please run `uvx determystic configure` to set it.[/red]")
-        sys.exit(1)
     
     if path:
         ProjectConfigManager.set_runtime_custom_path(path)
 
     config_manager = ProjectConfigManager.load_from_disk()
+    try:
+        agent_preference = get_local_agent_preference(config_manager.settings)
+        selected_agent = select_local_agent(agent_preference)
+    except LocalAgentSelectionError as e:
+        console.print(f"[red]{e}[/red]")
+        sys.exit(1)
 
     # Get code snippet from user
     console.print("\n[bold]Step 1: Provide the code snippet[/bold]")
@@ -176,36 +180,36 @@ async def new_validator_command(path: Path | None):
         sys.exit(0)
     
     # Run the agent
-    console.print("\n[bold cyan]🤖 Starting AST Validator Agent...[/bold cyan]")
+    console.print(f"\n[bold cyan]🤖 Starting AST Validator Agent ({selected_agent})...[/bold cyan]")
     console.print("[dim]This may take a few moments as the agent creates and tests the validator.[/dim]\n")
-    
-    # Import Anthropic model
-    anthropic_provider = AnthropicProvider(api_key=settings.anthropic_api_key)
-    anthropic_client = AnthropicModel("claude-sonnet-4-20250514", provider=anthropic_provider)
     
     # Save current working directory
     final_event: StreamEvent | None = None
-    async for event in stream_create_validator(
-        user_code=code_snippet,
-        requirements=issue_description,
-        anthropic_client=anthropic_client,
-    ):
-        if event.event_type == 'user_prompt':
-            console.print(f"[bold blue]📝 {event.content}[/bold blue]")
-        elif event.event_type == 'model_request_start':
-            console.print(f"[bold yellow]{event.content}[/bold yellow]")
-        elif event.event_type == 'text_chunk':
-            # Print text chunks as they arrive
-            console.print(event.content, end="", style="white")
-        elif event.event_type == 'tool_processing_start':
-            console.print(f"\n[bold cyan]{event.content}[/bold cyan]")
-        elif event.event_type == 'tool_call_start':
-            console.print(f"[cyan]🔧 Calling {event.content}[/cyan]")
-        elif event.event_type == 'tool_call_end':
-            console.print(f"[green]{event.content}[/green]")
-        elif event.event_type == 'final_result':
-            console.print(f"\n[bold green]{event.content}[/bold green]")
-            final_event = event
+    try:
+        async for event in stream_create_validator_with_local_agent(
+            user_code=code_snippet,
+            requirements=issue_description,
+            agent_name=selected_agent,
+        ):
+            if event.event_type == 'user_prompt':
+                console.print(f"[bold blue]📝 {event.content}[/bold blue]")
+            elif event.event_type == 'model_request_start':
+                console.print(f"[bold yellow]{event.content}[/bold yellow]")
+            elif event.event_type == 'text_chunk':
+                # Print text chunks as they arrive
+                console.print(event.content, end="", style="white")
+            elif event.event_type == 'tool_processing_start':
+                console.print(f"\n[bold cyan]{event.content}[/bold cyan]")
+            elif event.event_type == 'tool_call_start':
+                console.print(f"[cyan]🔧 Calling {event.content}[/cyan]")
+            elif event.event_type == 'tool_call_end':
+                console.print(f"[green]{event.content}[/green]")
+            elif event.event_type == 'final_result':
+                console.print(f"\n[bold green]{event.content}[/bold green]")
+                final_event = event
+    except LocalAgentExecutionError as e:
+        console.print(f"\n[red]Error: {e}[/red]")
+        sys.exit(1)
 
     if not final_event:
         console.print("\n[red]Error: No final event received from the agent.[/red]")

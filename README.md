@@ -8,24 +8,25 @@ It works by creating validators for your coding conventions, using the AST of yo
 
 ## Getting Started
 
-We'll look into adding a MCP server in the future. But for the time being just asking Claude Code / Cursor to run our validation script is usually good enough to get the job done.
+We'll look into adding a MCP server in the future. But for the time being just asking Codex, Claude Code, or Cursor to run our validation script is usually good enough to get the job done.
 
-Append to your `.cursorrules` (Cursor) or `CLAUDE.md` (Claude Code).
+Append to your `AGENTS.md` (Codex), `.cursorrules` (Cursor), or `CLAUDE.md` (Claude Code).
 
 ```
 Before yielding results, you should ALWAYS call `uvx determystic validate`. Iterate until all of our validators are passing.
-```
-
-Also setup your anthropic key for our global configuration. This will be accessible across projects so you should only have to do this once:
-
-```shell
-$ uvx determystic configure
 ```
 
 When you have an issue, you can add a special validation case using:
 
 ```shell
 $ uvx determystic new-validator
+```
+
+`new-validator` uses a local coding agent CLI. By default it uses Codex when `codex` is installed, and falls back to Claude Code when only `claude` is installed. You can pin the choice per project in `pyproject.toml`:
+
+```toml
+[tool.determystic.settings]
+validator_agent = "codex"  # "auto", "codex", or "claude"
 ```
 
 ## Example
@@ -87,7 +88,7 @@ My main annoyance in using these systems is when they output code that mostly wo
 
 All these happen regardless of how strongly I try to coerce the system prompt. We've managed to successfully make models pretty [tenacious](https://pierce.dev/notes/the-tenacity-of-modern-llms/) in problem solving, but that doesn't help much if they're able to cheat on the given problems.
 
-The main control we have over these systems today is in their system prompts: specifying a AGENT.md or .cursorrules file to try to guide their behavior over text alone. This certainly works for higher level instructions like describing a feature scope. But we lose precision over what we're looking for by having to describe programming goals and constructs in natural language instead of code. Adding in AST validation changes that - and it turns out that LLMs are actually very good at writing AST validators even though they're pretty annoying for people.
+The main control we have over these systems today is in their system prompts: specifying an AGENTS.md, CLAUDE.md, or .cursorrules file to try to guide their behavior over text alone. This certainly works for higher level instructions like describing a feature scope. But we lose precision over what we're looking for by having to describe programming goals and constructs in natural language instead of code. Adding in AST validation changes that - and it turns out that LLMs are actually very good at writing AST validators even though they're pretty annoying for people.
 
 ## Default validators
 
@@ -117,10 +118,20 @@ exclude = [
 ]
 ```
 
+### Agent Selection
+
+Generated validators are authored by a local coding agent CLI. The default `validator_agent = "auto"` checks for `codex` first, then `claude`. To force one agent for a project, add:
+
+```toml
+# pyproject.toml
+[tool.determystic.settings]
+validator_agent = "claude"
+```
+
 ## Random notes
 
 - Targeting just Python for now. Other languages can follow the same convention pretty closely, but we need to support AST validating for their syntax & test whether LLMs will output better AST validators when written in the same language or if we can use Python as a bridge for control logic
-- Using Anthropic's Claude to do the authoring of the AST validators and the testing files (although in theory it would be very easy to swap this out for any other coding model)
+- Using an installed local coding agent, Codex by default with Claude Code as a fallback, to author the AST validators and test files
 - We use .deterministic file extensions for our validation and validation test files. These are just python files but we prefer a different extension so they're not inadvertantly picked up by static analysis tools that just sniff for any .py extension. We might reconsider this in the future.
 - Since determystic files are on disk, they should be portable across projects and usable by CI validation across a team
 - Right now we don't support the editing case for existing validators - but this seems like an obvious extension in the future to try and make these more flexible given additional code that either incorrectly validates or does not validate
