@@ -204,7 +204,7 @@ version = "1.0"
         
         # Should pass validation
         assert result.success
-        assert "No hanging functions found" in result.output
+        assert "No dead code found" in result.output
 
     @pytest.mark.asyncio
     async def test_validate_with_class_methods(
@@ -461,6 +461,163 @@ result = obj.called_method()
         assert "used_function" not in result.output  # This is called, so not hanging
         # Verify only one function is reported
         assert result.output.count("never referenced") == 1
+
+    @pytest.mark.asyncio
+    async def test_validate_ignores_ast_visitor_hooks(
+        self,
+        temp_project_dir: Path,
+    ) -> None:
+        """Test that NodeVisitor-style visit hooks are not treated as hanging methods."""
+        python_code = '''
+import ast
+
+
+class MyVisitor(ast.NodeVisitor):
+    def visit_Call(self, node):
+        self.generic_visit(node)
+
+visitor = MyVisitor()
+'''
+        python_file = temp_project_dir / "visitor.py"
+        python_file.write_text(python_code)
+
+        validator = HangingFunctionsValidator(path=temp_project_dir)
+        result = await validator.validate()
+
+        assert result.success
+        assert "No dead code found" in result.output
+
+    @pytest.mark.asyncio
+    async def test_validate_detects_unused_classes_arguments_and_unreachable_code(
+        self,
+        temp_project_dir: Path,
+    ) -> None:
+        """Test the broader dead-code checks beyond unused functions."""
+        python_code = '''
+class UsedClass:
+    def method(self, value, unused_value):
+        return value
+
+class UnusedClass:
+    pass
+
+def function_with_unused_arg(used_value, unused_value):
+    print(used_value)
+    return used_value
+    print("unreachable")
+
+instance = UsedClass()
+result = instance.method("used", "unused")
+'''
+        python_file = temp_project_dir / "main.py"
+        python_file.write_text(python_code)
+
+        validator = HangingFunctionsValidator(path=temp_project_dir)
+        result = await validator.validate()
+
+        assert not result.success
+        assert "Class 'UnusedClass' is defined but never referenced" in result.output
+        assert "Argument 'unused_value' in 'UsedClass.method' is never used" in result.output
+        assert "Argument 'unused_value' in 'function_with_unused_arg' is never used" in result.output
+        assert "Unreachable code after terminal statement" in result.output
+
+    @pytest.mark.asyncio
+    async def test_validate_respects_determystic_suppression_comments(
+        self,
+        temp_project_dir: Path,
+    ) -> None:
+        """Test inline comments for externally used symbols and specific ignores."""
+        python_code = '''
+class ExternalPlugin:  # determystic: used
+    def callback(self, event, context):  # determystic: used
+        return event
+
+def public_api(value):  # determystic: used
+    return "called externally"
+
+# determystic: used
+def function_with_intentional_dead_code(arg):  # determystic: ignore[unused-argument]
+    return 1
+    print("unreachable")  # determystic: ignore[unreachable-code]
+
+def hanging_function():
+    return "still flagged"
+'''
+        python_file = temp_project_dir / "main.py"
+        python_file.write_text(python_code)
+
+        validator = HangingFunctionsValidator(path=temp_project_dir)
+        result = await validator.validate()
+
+        assert not result.success
+        assert "hanging_function" in result.output
+        assert "ExternalPlugin" not in result.output
+        assert "callback" not in result.output
+        assert "public_api" not in result.output
+        assert "function_with_intentional_dead_code" not in result.output
+        assert "Argument 'arg'" not in result.output
+        assert "unreachable" not in result.output.lower()
+
+    @pytest.mark.asyncio
+    async def test_validate_respects_function_and_block_suppression_comments(
+        self,
+        temp_project_dir: Path,
+    ) -> None:
+        """Test definition-level and block-level dead-code suppressions."""
+        python_code = '''
+# determystic: ignore[dead-code]
+def generated_callback(event, context):
+    return event
+    print("unreachable")
+
+# determystic: ignore-start[dead-code]
+class ExternalClass:
+    pass
+
+def external_function(unused_value):
+    return "external"
+# determystic: ignore-end[dead-code]
+
+def hanging_function():
+    return "still flagged"
+'''
+        python_file = temp_project_dir / "main.py"
+        python_file.write_text(python_code)
+
+        validator = HangingFunctionsValidator(path=temp_project_dir)
+        result = await validator.validate()
+
+        assert not result.success
+        assert "hanging_function" in result.output
+        assert "generated_callback" not in result.output
+        assert "ExternalClass" not in result.output
+        assert "external_function" not in result.output
+        assert "unused_value" not in result.output
+        assert "unreachable" not in result.output.lower()
+
+    @pytest.mark.asyncio
+    async def test_validate_respects_explicit_exports(
+        self,
+        temp_project_dir: Path,
+    ) -> None:
+        """Test that __all__ exports count as intentional public API."""
+        python_code = '''
+__all__ = ["ExportedClass", "exported_function"]
+
+class ExportedClass:
+    pass
+
+def exported_function():
+    return "exported"
+'''
+        python_file = temp_project_dir / "main.py"
+        python_file.write_text(python_code)
+
+        validator = HangingFunctionsValidator(path=temp_project_dir)
+        result = await validator.validate()
+
+        assert result.success
+        assert "No dead code found" in result.output
 
     def test_display_name_property(self, temp_project_dir: Path) -> None:
         """Test that display_name property formats the name correctly."""

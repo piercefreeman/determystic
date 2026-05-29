@@ -215,16 +215,6 @@ class StreamEvent(BaseModel):
     deps: AgentDependencies
 
 
-class WriteValidatorInput(BaseModel):
-    """Input for writing validator code."""
-    content: str = Field(description="The validator Python code content")
-
-
-class WriteTestsInput(BaseModel):
-    """Input for writing test code."""
-    content: str = Field(description="The test Python code content")
-
-
 class WriteFileInput(BaseModel):
     """Input for writing a generic file."""
     filename: str = Field(description="The name of the file to write")
@@ -392,7 +382,7 @@ async def finalize(
 
 
 # Streaming function
-async def stream_create_validator(
+async def stream_create_validator(  # determystic: used
     user_code: str,
     requirements: Optional[str],
     anthropic_client,
@@ -495,7 +485,7 @@ async def stream_create_validator(
 
 
 # Non-streaming function
-async def create_ast_validator(
+async def create_ast_validator(  # determystic: used
     user_code: str,
     requirements: Optional[str],
     anthropic_client,

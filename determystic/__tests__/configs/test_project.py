@@ -310,6 +310,7 @@ name = "sample"
 version = "2.0"
 project_name = "configured_project"
 exclude = ["Static Analysis"]
+enabled = ["Function Visibility"]
 
 [tool.determystic.settings]
 debug = true
@@ -322,6 +323,7 @@ validator_agent = "Codex"
                 assert config.version == "2.0"
                 assert config.project_name == "configured_project"
                 assert config.exclude == ["Static Analysis"]
+                assert config.enabled == ["Function Visibility"]
                 assert config.settings.validator_agent == "codex"
                 assert config.settings.model_extra == {"debug": True}
 

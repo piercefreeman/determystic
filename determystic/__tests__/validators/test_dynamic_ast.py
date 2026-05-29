@@ -336,6 +336,32 @@ class NotATraverser:
         assert "No issues found" in result.output
 
     @pytest.mark.asyncio
+    async def test_validate_respects_suppression_comments(
+        self,
+        temp_project_dir: Path,
+    ) -> None:
+        """Custom validators should share determystic suppression comments."""
+        python_file = temp_project_dir / "test_code.py"
+        python_file.write_text('''
+def test_function():
+    bad_pattern = "flagged"  # determystic: ignore[test-validator]
+    other_bad_pattern = "flagged"
+    return other_bad_pattern
+''')
+
+        validator = DynamicASTValidator(
+            name="test_validator",
+            validator_path=Path("dummy"),
+            path=temp_project_dir
+        )
+        validator.traverser_class = MockTraverserSingleArg
+
+        result = await validator.validate()
+
+        assert result.success
+        assert "No issues found" in result.output
+
+    @pytest.mark.asyncio
     async def test_validate_no_python_files(self, temp_project_dir: Path) -> None:
         """Test validation when there are no Python files."""
         # Create validator instance

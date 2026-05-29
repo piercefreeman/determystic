@@ -31,52 +31,6 @@ class IsolatedEnv:
         if self.temp_dir and self.temp_dir.exists():
             shutil.rmtree(self.temp_dir)
     
-    def create_test_package(self, validator_code: str, test_code: str) -> Path:
-        """Create a temporary package for running agent-generated tests.
-        
-        Args:
-            validator_code: The validator code to test
-            test_code: The test code to run
-            
-        Returns:
-            Path to the temporary package directory
-        """
-        if not self.temp_dir:
-            raise RuntimeError("IsolatedEnv must be used as a context manager")
-        
-        # Create package structure
-        package_dir = self.temp_dir / "temp_validator"
-        package_dir.mkdir(parents=True)
-
-        # Sniff for the path of the determystic package
-        
-        # Create pyproject.toml with local determystic dependency
-        pyproject_content = f'''[build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
-
-[project]
-name = "temp-validator"
-version = "0.1.0"
-dependencies = [
-    "determystic @ file://{self.determystic_package_path.absolute()}",
-    "pytest>=6.0"
-]
-
-[tool.setuptools.packages.find]
-where = ["."]
-'''
-        
-        (package_dir / "pyproject.toml").write_text(pyproject_content)
-        
-        # Create the validator module
-        (package_dir / "validator.py").write_text(validator_code)
-        
-        # Create test module
-        (package_dir / "test_validator.py").write_text(test_code)
-        
-        return package_dir
-    
     def run_tests(self, validator_code: str, test_code: str) -> tuple[bool, str]:
         """Run the agent-generated tests in an isolated environment.
         
@@ -89,7 +43,7 @@ where = ["."]
         """
         try:
             # Create the temporary package
-            package_dir = self.create_test_package(validator_code, test_code)
+            package_dir = self._create_test_package(validator_code, test_code)
             
             result = subprocess.run(
                 ["uv", "run", "pytest", "test_validator.py", "-v"],
@@ -109,3 +63,47 @@ where = ["."]
             return False, "Test execution timed out"
         except Exception as e:
             return False, f"Unexpected error running tests: {e}"
+
+    def _create_test_package(self, validator_code: str, test_code: str) -> Path:
+        """Create a temporary package for running agent-generated tests.
+
+        Args:
+            validator_code: The validator code to test
+            test_code: The test code to run
+
+        Returns:
+            Path to the temporary package directory
+        """
+        if not self.temp_dir:
+            raise RuntimeError("IsolatedEnv must be used as a context manager")
+
+        # Create package structure
+        package_dir = self.temp_dir / "temp_validator"
+        package_dir.mkdir(parents=True)
+
+        # Create pyproject.toml with local determystic dependency
+        pyproject_content = f'''[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "temp-validator"
+version = "0.1.0"
+dependencies = [
+    "determystic @ file://{self.determystic_package_path.absolute()}",
+    "pytest>=6.0"
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+'''
+
+        (package_dir / "pyproject.toml").write_text(pyproject_content)
+
+        # Create the validator module
+        (package_dir / "validator.py").write_text(validator_code)
+
+        # Create test module
+        (package_dir / "test_validator.py").write_text(test_code)
+
+        return package_dir
