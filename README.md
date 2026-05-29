@@ -90,34 +90,63 @@ All these happen regardless of how strongly I try to coerce the system prompt. W
 
 The main control we have over these systems today is in their system prompts: specifying an AGENTS.md, CLAUDE.md, or .cursorrules file to try to guide their behavior over text alone. This certainly works for higher level instructions like describing a feature scope. But we lose precision over what we're looking for by having to describe programming goals and constructs in natural language instead of code. Adding in AST validation changes that - and it turns out that LLMs are actually very good at writing AST validators even though they're pretty annoying for people.
 
-## Default validators
+## Bundled validators
 
-We provide some default validators that are good choices for most projects, but these can be disabled on a per project basis.
+Determystic includes bundled validators that can replace parts of a conventional lint stack. Bundled validators are opt-in: list the ones you want under `[tool.determystic].enabled`. Custom validators created in your project are enabled automatically unless excluded.
 
 | Name | Validator | Description | Powered By |
 |------|-----------|-------------|------------|
 | `static_analysis` | **Static Analysis** | Code formatting, style conventions, and type checking | `ruff` + `ty` |
-| `hanging_functions` | **Hanging Functions** | Detects functions that are defined but never called | AST analysis |
+| `hanging_functions` | **Hanging Functions** | Detects unused functions, methods, classes, arguments, and unreachable code | AST analysis |
 | `function_visibility` | **Function Visibility** | Requires externally used functions/methods before private helpers, and internal helpers to use `_` prefixes | Project import graph + AST analysis |
 | `dynamic_ast` | **Dynamic AST** | Loads and runs custom validators from `.determystic` files | Custom AST traversers |
 
 ## Configuration
 
-You can customize which validators run in your project by adding a `[tool.determystic]` section to your project `pyproject.toml`. The configuration supports excluding specific validators from running.
+You can customize which validators run in your project by adding a `[tool.determystic]` section to your project `pyproject.toml`. The configuration supports enabling bundled validators and excluding specific validators from running.
 Generated custom validator metadata is also tracked in this section; the generated validator source files still live under `.determystic/`.
+
+### Enabling Bundled Validators
+
+To enable bundled validators, add their names to the `enabled` list in your config:
+
+```toml
+# pyproject.toml
+[tool.determystic]
+enabled = [
+    "static_analysis",
+    "function_visibility"
+]
+```
+
+Use `enabled = ["all"]` to opt into every bundled validator explicitly.
 
 ### Excluding Validators
 
-To disable specific validators, add them to the `exclude` list in your config:
+Custom validators are active by default. To disable a custom validator or override an enabled bundled validator, add it to the `exclude` list:
 
 ```toml
 # pyproject.toml
 [tool.determystic]
 exclude = [
-    "Static Analysis",
-    "Hanging Functions"
+    "my_custom_validator",
+    "Function Visibility"
 ]
 ```
+
+### Dead Code Suppressions
+
+The `hanging_functions` validator is intended as a focused Vulture replacement when enabled. Mark externally used definitions or callback signatures with inline comments:
+
+```python
+def public_plugin_hook(event, context):  # determystic: used
+    return event
+
+def generated_path(value):  # determystic: ignore[unused-argument]
+    return 1
+```
+
+Supported ignore codes include `unused-function`, `unused-method`, `unused-class`, `unused-argument`, `unreachable-code`, and `dead-code`.
 
 ### Agent Selection
 

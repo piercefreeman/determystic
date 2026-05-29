@@ -66,6 +66,10 @@ class ProjectConfigManager(BaseConfig):
     updated_at: datetime = Field(default_factory=datetime.now)
 
     exclude: list[str] = Field(default_factory=list, description="List of validators to exclude from validation")
+    enabled: list[str] = Field(
+        default_factory=list,
+        description="List of bundled validators to enable. Custom validators are enabled by default.",
+    )
     
     # Validator files tracking
     validators: dict[str, ValidatorFile] = Field(

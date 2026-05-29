@@ -8,7 +8,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
-from determystic.cli.common import create_all_validators, load_project_config
+from determystic.cli.common import create_all_validators, is_validator_enabled, load_project_config
 
 console = Console()
 
@@ -61,8 +61,11 @@ def list_validators_command(path: Path | None):
             builtin_count += 1
         
         # Determine validator status (active vs ignored)
-        is_excluded = validator.display_name in config_manager.exclude
-        status_text = "[yellow]Ignored[/yellow]" if is_excluded else "[green]Active[/green]"
+        status_text = (
+            "[green]Active[/green]"
+            if is_validator_enabled(validator, config_manager)
+            else "[yellow]Ignored[/yellow]"
+        )
         
         # Handle description and files for custom vs built-in validators
         if is_custom:
@@ -97,12 +100,16 @@ def list_validators_command(path: Path | None):
             # Built-in validator
             files_text = Text.from_markup("[blue]built-in[/blue]")
             # Add descriptions for built-in validators
-            if "ruff" in validator.name:
-                description = "Python linting with ruff"
-            elif "ty" in validator.name:
-                description = "Type checking with ty"
+            if validator.name == "static_analysis":
+                command = getattr(validator, "command", [])
+                if command and command[0] == "ruff":
+                    description = "Python linting with ruff"
+                elif command and command[0] == "ty":
+                    description = "Type checking with ty"
+                else:
+                    description = "Static analysis"
             elif "hanging_functions" in validator.name:
-                description = "Detect hanging function calls"
+                description = "Detect unused definitions and unreachable code"
             elif "function_visibility" in validator.name:
                 description = "Enforce public-before-private function layout"
             else:
@@ -124,7 +131,7 @@ def list_validators_command(path: Path | None):
     
     # Show summary
     total_validators = len(all_validators)
-    active_count = len([v for v in all_validators if v.display_name not in config_manager.exclude])
+    active_count = len([v for v in all_validators if is_validator_enabled(v, config_manager)])
     
     summary_parts = []
     if builtin_count > 0:

@@ -13,5 +13,8 @@ build-backend = "hatchling.build"
 [project.scripts]
 determystic = "determystic.entrypoint:cli"
 
+[tool.determystic]
+enabled = [ "all",]
+
 [tool.uv]
 package = true
