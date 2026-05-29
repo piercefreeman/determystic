@@ -19,7 +19,6 @@ def list_validators_command(path: Path | None):
     """List all validators (built-in and custom) in a determystic project."""
     # Load project configuration
     config_manager = load_project_config(path)
-    config_path = config_manager.get_config_path().parent if hasattr(config_manager, 'get_config_path') else None
     
     # Get all validators (built-in and custom)
     all_validators = create_all_validators(config_manager)
@@ -69,9 +68,13 @@ def list_validators_command(path: Path | None):
         if is_custom:
             # Custom validator - check file existence
             validator_file = config_manager.validators.get(validator.name)
-            if validator_file and config_path:
-                validator_file_path = config_path / validator_file.validator_path
-                test_file_path = config_path / validator_file.test_path if validator_file.test_path else None
+            if validator_file:
+                validator_file_path = config_manager.resolve_project_path(validator_file.validator_path)
+                test_file_path = (
+                    config_manager.resolve_project_path(validator_file.test_path)
+                    if validator_file.test_path
+                    else None
+                )
                 
                 files_status = []
                 if validator_file_path.exists():

@@ -40,7 +40,7 @@ class TestDynamicASTValidator:
 
     @pytest.fixture
     def temp_project_dir(self):
-        """Create a temporary project directory with .determystic structure."""
+        """Create a temporary project directory with .determystic validator files."""
         with tempfile.TemporaryDirectory() as temp_dir:
             project_path = Path(temp_dir)
             
@@ -114,12 +114,13 @@ def test_function():
 
     def test_create_validators_empty_config(self, temp_project_dir: Path) -> None:
         """Test create_validators with empty configuration."""
-        # Create empty config
-        config_path = temp_project_dir / ".determystic" / "config.toml"
+        # Create empty pyproject config
+        config_path = temp_project_dir / "pyproject.toml"
         config_path.write_text('''
+[tool.determystic]
 version = "1.0"
-[validators]
-[settings]
+[tool.determystic.validators]
+[tool.determystic.settings]
 ''')
         
         # Reset and set runtime path and load config manager
@@ -141,14 +142,15 @@ version = "1.0"
         validator_file = temp_project_dir / ".determystic" / "validations" / "test_validator.determystic"
         validator_file.write_text(sample_validator_content_single_arg)
 
-        # Create config
-        config_path = temp_project_dir / ".determystic" / "config.toml"
+        # Create pyproject config
+        config_path = temp_project_dir / "pyproject.toml"
         config_path.write_text('''
+[tool.determystic]
 version = "1.0"
-[validators.test_validator]
+[tool.determystic.validators.test_validator]
 name = "test_validator"
-validator_path = "validations/test_validator.determystic"
-[settings]
+validator_path = ".determystic/validations/test_validator.determystic"
+[tool.determystic.settings]
 ''')
 
         # Reset and set runtime path and load config manager
@@ -173,14 +175,15 @@ validator_path = "validations/test_validator.determystic"
         validator_file = temp_project_dir / ".determystic" / "validations" / "test_validator.determystic"
         validator_file.write_text(sample_validator_content_two_args)
         
-        # Create config
-        config_path = temp_project_dir / ".determystic" / "config.toml"
+        # Create pyproject config
+        config_path = temp_project_dir / "pyproject.toml"
         config_path.write_text('''
+[tool.determystic]
 version = "1.0"
-[validators.test_validator]
+[tool.determystic.validators.test_validator]
 name = "test_validator"
-validator_path = "validations/test_validator.determystic"
-[settings]
+validator_path = ".determystic/validations/test_validator.determystic"
+[tool.determystic.settings]
 ''')
         
         # Reset and set runtime path and load config manager
@@ -197,14 +200,15 @@ validator_path = "validations/test_validator.determystic"
 
     def test_create_validators_nonexistent_file(self, temp_project_dir: Path) -> None:
         """Test create_validators with a validator file that doesn't exist."""
-        # Create config pointing to non-existent file
-        config_path = temp_project_dir / ".determystic" / "config.toml"
+        # Create pyproject config pointing to non-existent file
+        config_path = temp_project_dir / "pyproject.toml"
         config_path.write_text('''
+[tool.determystic]
 version = "1.0"
-[validators.missing_validator]
+[tool.determystic.validators.missing_validator]
 name = "missing_validator"
-validator_path = "validations/missing.determystic"
-[settings]
+validator_path = ".determystic/validations/missing.determystic"
+[tool.determystic.settings]
 ''')
         
         # Reset and set runtime path and load config manager

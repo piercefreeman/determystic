@@ -101,14 +101,16 @@ We provide some default validators that are good choices for most projects, but 
 
 ## Configuration
 
-You can customize which validators run in your project by creating a `.determystic/config.toml` file in your project root. The configuration file supports excluding specific validators from running.
+You can customize which validators run in your project by adding a `[tool.determystic]` section to your project `pyproject.toml`. The configuration supports excluding specific validators from running.
+Generated custom validator metadata is also tracked in this section; the generated validator source files still live under `.determystic/`.
 
 ### Excluding Validators
 
 To disable specific validators, add them to the `exclude` list in your config:
 
 ```toml
-# .determystic/config.toml
+# pyproject.toml
+[tool.determystic]
 exclude = [
     "Static Analysis",
     "Hanging Functions"

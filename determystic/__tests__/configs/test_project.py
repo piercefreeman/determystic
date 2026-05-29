@@ -1,6 +1,7 @@
 """Parameterized tests for project configuration management."""
 
 import tempfile
+import tomllib
 from datetime import datetime
 from pathlib import Path
 from typing import Type
@@ -89,14 +90,14 @@ class TestProjectConfigManagerClassMethods:
             ProjectConfigManager.set_runtime_custom_path(path)
             
             # Verify the runtime path was set
-            assert ProjectConfigManager.runtime_custom_path == path / ".determystic"
+            assert ProjectConfigManager.runtime_custom_path == path.absolute()
             
             # Clean up
             ProjectConfigManager.runtime_custom_path = None
 
     @pytest.mark.parametrize("runtime_path_set,expected_paths_count", [
         (True, 1),   # With runtime path set, should return 1 path
-        (False, 2),  # Without runtime path, should return 2 paths (git root + pyproject)
+        (False, 1),  # Without runtime path, should return the discovered pyproject
     ])
     def test_get_possible_config_paths(
         self, 
@@ -123,16 +124,14 @@ class TestProjectConfigManagerClassMethods:
                 assert len(paths) == expected_paths_count
                 
                 if runtime_path_set:
-                    assert paths == [custom_path / "config.toml"]
+                    assert paths == [custom_path / "pyproject.toml"]
                     # Verify detect functions weren't called when runtime path is set
                     mock_git.assert_not_called()
                     mock_pyproject.assert_not_called()
                 else:
-                    expected_git_path = temp_path / "git_root" / ".determystic" / "config.toml"
-                    expected_pyproject_path = temp_path / "pyproject_root" / ".determystic" / "config.toml"
-                    assert paths == [expected_git_path, expected_pyproject_path]
-                    # Verify detect functions were called
-                    mock_git.assert_called_once()
+                    expected_pyproject_path = temp_path / "pyproject_root" / "pyproject.toml"
+                    assert paths == [expected_pyproject_path]
+                    mock_git.assert_not_called()
                     mock_pyproject.assert_called_once()
                 
                 # Clean up
@@ -159,7 +158,7 @@ class TestProjectConfigManagerInstanceMethods:
         """Test creating new validation files with various parameters."""
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
-            config_file = temp_path / "config.toml"
+            config_file = temp_path / "pyproject.toml"
             config_file.write_text("")
             
             with patch.object(ProjectConfigManager, 'get_possible_config_paths', return_value=[config_file]):
@@ -174,10 +173,10 @@ class TestProjectConfigManagerInstanceMethods:
                 assert validator_file.description == description
                 assert isinstance(validator_file.created_at, datetime)
                 
-                # Verify paths are relative to config root
-                config_root = config_file.parent
-                expected_validator_path = f"validations/{name}.determystic"
-                expected_test_path = f"tests/{name}.determystic"
+                # Verify paths are relative to the project root
+                config_root = config_file.parent / ".determystic"
+                expected_validator_path = f".determystic/validations/{name}.determystic"
+                expected_test_path = f".determystic/tests/{name}.determystic"
                 
                 assert validator_file.validator_path == expected_validator_path
                 assert validator_file.test_path == expected_test_path
@@ -214,7 +213,7 @@ class TestProjectConfigManagerInstanceMethods:
         """Test deleting validators with various scenarios."""
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
-            config_file = temp_path / "config.toml"
+            config_file = temp_path / "pyproject.toml"
             config_file.write_text("")
             
             with patch.object(ProjectConfigManager, 'get_possible_config_paths', return_value=[config_file]):
@@ -254,7 +253,7 @@ class TestProjectConfigManagerInstanceMethods:
         """Test that new_validation updates the updated_at timestamp."""
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
-            config_file = temp_path / "config.toml"
+            config_file = temp_path / "pyproject.toml"
             config_file.write_text("")
             
             with patch.object(ProjectConfigManager, 'get_possible_config_paths', return_value=[config_file]):
@@ -274,15 +273,15 @@ class TestProjectConfigManagerInstanceMethods:
         """Test that new_validation creates necessary directories."""
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
-            config_file = temp_path / "config.toml"
+            config_file = temp_path / "pyproject.toml"
             config_file.write_text("")
             
             with patch.object(ProjectConfigManager, 'get_possible_config_paths', return_value=[config_file]):
                 config = ProjectConfigManager()
                 
                 # Ensure directories don't exist initially
-                validations_dir = config_file.parent / "validations"
-                tests_dir = config_file.parent / "tests"
+                validations_dir = config_file.parent / ".determystic" / "validations"
+                tests_dir = config_file.parent / ".determystic" / "tests"
                 assert not validations_dir.exists()
                 assert not tests_dir.exists()
                 
@@ -297,6 +296,55 @@ class TestProjectConfigManagerInstanceMethods:
 
 class TestProjectConfigManagerIntegration:
     """Integration tests for ProjectConfigManager."""
+
+    def test_load_from_pyproject_tool_section(self) -> None:
+        """Test loading project config from [tool.determystic]."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            config_file = temp_path / "pyproject.toml"
+            config_file.write_text("""
+[project]
+name = "sample"
+
+[tool.determystic]
+version = "2.0"
+project_name = "configured_project"
+exclude = ["Static Analysis"]
+
+[tool.determystic.settings]
+debug = true
+""")
+
+            with patch.object(ProjectConfigManager, 'get_possible_config_paths', return_value=[config_file]):
+                config = ProjectConfigManager.load_from_disk()
+
+                assert config.version == "2.0"
+                assert config.project_name == "configured_project"
+                assert config.exclude == ["Static Analysis"]
+                assert config.settings == {"debug": True}
+
+    def test_save_to_pyproject_preserves_existing_sections(self) -> None:
+        """Test saving config under [tool.determystic] without dropping pyproject metadata."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            config_file = temp_path / "pyproject.toml"
+            config_file.write_text("""
+[project]
+name = "sample"
+
+[tool.uv]
+package = true
+""")
+
+            with patch.object(ProjectConfigManager, 'get_possible_config_paths', return_value=[config_file]):
+                config = ProjectConfigManager(project_name="configured_project")
+                config.save_to_disk()
+
+                with config_file.open("rb") as f:
+                    saved_data = tomllib.load(f)
+                assert saved_data["project"]["name"] == "sample"
+                assert saved_data["tool"]["uv"]["package"] is True
+                assert saved_data["tool"]["determystic"]["project_name"] == "configured_project"
     
     @pytest.mark.parametrize("config_data", [
         {"version": "1.0", "project_name": "test_project"},
@@ -306,7 +354,7 @@ class TestProjectConfigManagerIntegration:
         """Test that saving and loading a config preserves all data."""
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
-            config_file = temp_path / "config.toml"
+            config_file = temp_path / "pyproject.toml"
             config_file.write_text("")
             
             with patch.object(ProjectConfigManager, 'get_possible_config_paths', return_value=[config_file]):
@@ -327,7 +375,7 @@ class TestProjectConfigManagerIntegration:
         """Test a complete workflow with multiple validators."""
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
-            config_file = temp_path / "config.toml"
+            config_file = temp_path / "pyproject.toml"
             config_file.write_text("")
             
             with patch.object(ProjectConfigManager, 'get_possible_config_paths', return_value=[config_file]):
