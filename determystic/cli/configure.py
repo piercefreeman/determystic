@@ -11,18 +11,6 @@ from determystic.configs.system import DeterministicSettings
 console = Console()
 
 
-def _is_sensitive_field(field_name: str) -> bool:
-    """Determine if a field contains sensitive information."""
-    return any(term in field_name.lower() for term in ["key", "password", "secret", "token"])
-
-
-def _mask_sensitive_value(value: str, field_name: str) -> str:
-    """Mask sensitive values for display."""
-    if _is_sensitive_field(field_name):
-        return value[:7] + "..." + value[-4:] if len(value) > 10 else "***"
-    return value
-
-
 @click.command()
 def configure_command():
     """Configure API keys and other settings for the determystic tool."""
@@ -86,4 +74,15 @@ def configure_command():
     
     console.print("\n[green]You can now use the determystic tools![/green]")
     console.print("[dim]Try: determystic new-validator[/dim]")
-    
+
+
+def _is_sensitive_field(field_name: str) -> bool:
+    """Determine if a field contains sensitive information."""
+    return any(term in field_name.lower() for term in ["key", "password", "secret", "token"])
+
+
+def _mask_sensitive_value(value: str, field_name: str) -> str:
+    """Mask sensitive values for display."""
+    if _is_sensitive_field(field_name):
+        return value[:7] + "..." + value[-4:] if len(value) > 10 else "***"
+    return value

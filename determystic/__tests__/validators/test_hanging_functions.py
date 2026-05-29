@@ -462,6 +462,29 @@ result = obj.called_method()
         # Verify only one function is reported
         assert result.output.count("never referenced") == 1
 
+    @pytest.mark.asyncio
+    async def test_validate_ignores_ast_visitor_hooks(
+        self,
+        temp_project_dir: Path,
+    ) -> None:
+        """Test that NodeVisitor-style visit hooks are not treated as hanging methods."""
+        python_code = '''
+import ast
+
+
+class MyVisitor(ast.NodeVisitor):
+    def visit_Call(self, node):
+        self.generic_visit(node)
+'''
+        python_file = temp_project_dir / "visitor.py"
+        python_file.write_text(python_code)
+
+        validator = HangingFunctionsValidator(path=temp_project_dir)
+        result = await validator.validate()
+
+        assert result.success
+        assert "No hanging functions found" in result.output
+
     def test_display_name_property(self, temp_project_dir: Path) -> None:
         """Test that display_name property formats the name correctly."""
         validator = HangingFunctionsValidator(path=temp_project_dir)

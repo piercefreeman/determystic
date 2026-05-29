@@ -103,7 +103,7 @@ def find_pattern_in_code(code: str, pattern: str, filename: str = "<string>") ->
     return issues
 
 
-def create_issue_with_context(
+def _create_issue_with_context(
     code: str, 
     line_number: int, 
     message: str, 
@@ -188,36 +188,11 @@ class DeterministicTraverser(ast.NodeVisitor):
         line_number = getattr(node, 'lineno', 1)
         col_number = column_offset or getattr(node, 'col_offset', None)
         
-        issue = create_issue_with_context(
+        issue = _create_issue_with_context(
             code=self.code,
             line_number=line_number,
             message=message,
             column_number=col_number,
-            context_lines=context_lines
-        )
-        
-        self.errors.append(issue)
-    
-    def add_error_at_line(
-        self, 
-        line_number: int, 
-        message: str, 
-        column_number: int | None = None,
-        context_lines: int = 2
-    ) -> None:
-        """Add a validation error at a specific line number.
-        
-        Args:
-            line_number: Line number where the error occurs
-            message: Description of the error
-            column_number: Optional column position
-            context_lines: Number of context lines to include
-        """
-        issue = create_issue_with_context(
-            code=self.code,
-            line_number=line_number,
-            message=message,
-            column_number=column_number,
             context_lines=context_lines
         )
         
@@ -234,7 +209,7 @@ class DeterministicTraverser(ast.NodeVisitor):
             self.visit(tree)
         except SyntaxError as e:
             # Add syntax error as a validation issue
-            self.add_error_at_line(
+            self._add_error_at_line(
                 line_number=e.lineno or 1,
                 message=f"Syntax error: {e.msg}",
                 column_number=e.offset
@@ -245,4 +220,22 @@ class DeterministicTraverser(ast.NodeVisitor):
             issues=self.errors,
             message=None if len(self.errors) == 0 else f"Found {len(self.errors)} issue(s)"
         )
+
+    def _add_error_at_line(
+        self,
+        line_number: int,
+        message: str,
+        column_number: int | None = None,
+        context_lines: int = 2
+    ) -> None:
+        """Add a validation error at a specific line number."""
+        issue = _create_issue_with_context(
+            code=self.code,
+            line_number=line_number,
+            message=message,
+            column_number=column_number,
+            context_lines=context_lines
+        )
+
+        self.errors.append(issue)
     

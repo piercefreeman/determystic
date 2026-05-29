@@ -97,6 +97,7 @@ We provide some default validators that are good choices for most projects, but 
 |------|-----------|-------------|------------|
 | `static_analysis` | **Static Analysis** | Code formatting, style conventions, and type checking | `ruff` + `ty` |
 | `hanging_functions` | **Hanging Functions** | Detects functions that are defined but never called | AST analysis |
+| `function_visibility` | **Function Visibility** | Requires externally used functions/methods before private helpers, and internal helpers to use `_` prefixes | Project import graph + AST analysis |
 | `dynamic_ast` | **Dynamic AST** | Loads and runs custom validators from `.determystic` files | Custom AST traversers |
 
 ## Configuration

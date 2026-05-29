@@ -239,6 +239,11 @@ class HangingFunctionsValidator(BaseValidator):
             # Skip decorated functions (often used for registering with frameworks)
             if func.has_decorators:
                 continue
+
+            # Skip ast.NodeVisitor-style hooks, which are called reflectively by
+            # generic traversal rather than through explicit call sites.
+            if func.is_method and func.name.startswith("visit_"):
+                continue
             
             # Skip script entrypoints
             if func.name in script_entrypoints:

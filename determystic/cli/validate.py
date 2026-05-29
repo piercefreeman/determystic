@@ -40,10 +40,10 @@ def validate_command(path: Path | None, verbose: bool):
     
     # At this point target_path is guaranteed to exist
     assert target_path is not None
-    asyncio.run(run_validation(target_path, verbose))
+    asyncio.run(_run_validation(target_path, verbose))
 
 
-def create_status_table(validators: list, results: dict) -> Table:
+def _create_status_table(validators: list, results: dict) -> Table:
     """Create a status table showing validation progress."""
     table = Table(
         show_header=True,
@@ -83,7 +83,7 @@ def create_status_table(validators: list, results: dict) -> Table:
     return table
 
 
-async def run_validation(path: Path, verbose: bool):
+async def _run_validation(path: Path, verbose: bool):
     """Run the validation process."""
     console.print(Panel.fit(
         f"[bold cyan]Validating:[/bold cyan] {path.absolute()}",
@@ -102,7 +102,7 @@ async def run_validation(path: Path, verbose: bool):
     results = {}
     
     # Create live display
-    with Live(create_status_table(display_validators, results), console=console, refresh_per_second=4) as live:
+    with Live(_create_status_table(display_validators, results), console=console, refresh_per_second=4) as live:
         # Run validation in parallel
         tasks = []
         for validator in display_validators:
@@ -110,7 +110,7 @@ async def run_validation(path: Path, verbose: bool):
                 result = await v.validate()
                 results[v.name] = result
                 # Update the live display immediately when a validator completes
-                live.update(create_status_table(display_validators, results))
+                live.update(_create_status_table(display_validators, results))
                 return v.name, result
             tasks.append(run_and_store(validator))
         
@@ -118,7 +118,7 @@ async def run_validation(path: Path, verbose: bool):
         await asyncio.gather(*tasks)
         
         # Final update to ensure all results are displayed
-        live.update(create_status_table(display_validators, results))
+        live.update(_create_status_table(display_validators, results))
         
         # Give a brief moment for users to see the final status
         await asyncio.sleep(0.5)

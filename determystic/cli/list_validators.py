@@ -103,6 +103,8 @@ def list_validators_command(path: Path | None):
                 description = "Type checking with ty"
             elif "hanging_functions" in validator.name:
                 description = "Detect hanging function calls"
+            elif "function_visibility" in validator.name:
+                description = "Enforce public-before-private function layout"
             else:
                 description = f"Built-in {validator.display_name} validator"
         
