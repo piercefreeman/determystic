@@ -2,13 +2,15 @@
 
 import tomllib
 from datetime import datetime
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Literal
 from pathlib import Path
 
 import tomli_w
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from determystic.configs.base import BaseConfig
 from determystic.io import detect_git_root, detect_pyproject_path
+
+ValidatorAgentPreference = Literal["auto", "codex", "claude"]
 
 
 class ValidatorFile(BaseModel):
@@ -18,6 +20,43 @@ class ValidatorFile(BaseModel):
     test_path: str | None = Field(default=None, description="Relative path to the test file")
     created_at: datetime = Field(default_factory=datetime.now)
     description: str | None = Field(default=None, description="Description of what this validator checks")
+
+
+class ProjectSettings(BaseModel):
+    """Project-specific settings stored under [tool.determystic.settings]."""
+
+    validator_agent: ValidatorAgentPreference = Field(
+        default="auto",
+        description="Local coding agent used to generate validators: auto, codex, or claude",
+    )
+
+    model_config = ConfigDict(extra="allow")
+
+    @model_validator(mode="before")
+    @classmethod
+    def migrate_agent_alias(cls, data: Any) -> Any:
+        """Accept legacy `agent` config while persisting the documented key."""
+        if not isinstance(data, dict):
+            return data
+
+        values = dict(data)
+        if "validator_agent" not in values and "agent" in values:
+            values["validator_agent"] = values.pop("agent")
+        return values
+
+    @field_validator("validator_agent", mode="before")
+    @classmethod
+    def normalize_validator_agent(cls, value: Any) -> Any:
+        """Normalize and validate the configured local agent preference."""
+        if value is None or value == "":
+            return "auto"
+        if not isinstance(value, str):
+            raise ValueError("validator_agent must be one of: auto, codex, claude")
+
+        normalized = value.strip().lower()
+        if normalized not in {"auto", "codex", "claude"}:
+            raise ValueError("validator_agent must be one of: auto, codex, claude")
+        return normalized
 
 
 class ProjectConfigManager(BaseConfig):
@@ -39,8 +78,8 @@ class ProjectConfigManager(BaseConfig):
     )
     
     # Project settings
-    settings: dict[str, Any] = Field(
-        default_factory=dict,
+    settings: ProjectSettings = Field(
+        default_factory=ProjectSettings,
         description="Project-specific settings"
     )
 

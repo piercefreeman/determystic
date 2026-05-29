@@ -9,8 +9,6 @@ from determystic.agents.local_agent import (
     LocalAgentSelectionError,
     _build_prompt,
     create_validator_with_local_agent,
-    get_local_agent_preference,
-    normalize_local_agent_preference,
     select_local_agent,
     _read_generated_files,
 )
@@ -43,27 +41,6 @@ def test_explicit_preference_requires_installed_agent() -> None:
     assert select_local_agent("claude", which=fake_which) == "claude"
     with pytest.raises(LocalAgentSelectionError, match="codex"):
         select_local_agent("codex", which=fake_which)
-
-
-@pytest.mark.parametrize(
-    ("raw_value", "expected"),
-    [
-        (None, "auto"),
-        ("", "auto"),
-        ("auto", "auto"),
-        ("Codex", "codex"),
-        (" claude ", "claude"),
-    ],
-)
-def test_normalize_local_agent_preference(raw_value: object, expected: str) -> None:
-    """Project settings should accept simple string preferences."""
-    assert normalize_local_agent_preference(raw_value) == expected
-
-
-def test_get_local_agent_preference_uses_validator_agent_key() -> None:
-    """The documented validator_agent key should take precedence."""
-    assert get_local_agent_preference({"validator_agent": "codex", "agent": "claude"}) == "codex"
-    assert get_local_agent_preference({"agent": "claude"}) == "claude"
 
 
 def test_read_generated_files_from_workspace(tmp_path: Path) -> None:

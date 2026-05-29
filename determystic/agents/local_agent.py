@@ -8,7 +8,7 @@ import shutil
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import AsyncGenerator, Callable, Literal, Mapping, cast
+from typing import AsyncGenerator, Callable, Literal
 
 from pydantic import BaseModel, Field
 
@@ -17,12 +17,11 @@ from determystic.agents.create_validator import (
     StreamEvent,
     SYSTEM_PROMPT,
 )
+from determystic.configs.project import ValidatorAgentPreference
 from determystic.isolated_env import IsolatedEnv
 
 LocalAgentName = Literal["codex", "claude"]
-LocalAgentPreference = Literal["auto", "codex", "claude"]
 
-DEFAULT_LOCAL_AGENT_PREFERENCE: LocalAgentPreference = "auto"
 LOCAL_AGENT_ORDER: tuple[LocalAgentName, ...] = ("codex", "claude")
 LOCAL_AGENT_SETTINGS_KEY = "validator_agent"
 
@@ -119,32 +118,8 @@ def _external_interface() -> str:
         return ""
 
 
-def normalize_local_agent_preference(value: object) -> LocalAgentPreference:
-    """Normalize a project config setting into a supported local agent preference."""
-    if value is None or value == "":
-        return DEFAULT_LOCAL_AGENT_PREFERENCE
-    if not isinstance(value, str):
-        raise LocalAgentSelectionError(
-            f"{LOCAL_AGENT_SETTINGS_KEY} must be one of: auto, codex, claude"
-        )
-
-    normalized = value.strip().lower()
-    if normalized in {"auto", "codex", "claude"}:
-        return cast(LocalAgentPreference, normalized)
-
-    raise LocalAgentSelectionError(
-        f"Unsupported {LOCAL_AGENT_SETTINGS_KEY} '{value}'. Use one of: auto, codex, claude"
-    )
-
-
-def get_local_agent_preference(settings: Mapping[str, object]) -> LocalAgentPreference:
-    """Read local agent preference from [tool.determystic.settings]."""
-    value = settings.get(LOCAL_AGENT_SETTINGS_KEY, settings.get("agent"))
-    return normalize_local_agent_preference(value)
-
-
 def select_local_agent(
-    preference: LocalAgentPreference,
+    preference: ValidatorAgentPreference,
     which: Callable[[str], str | None] = shutil.which,
 ) -> LocalAgentName:
     """Choose an installed local agent, preferring Codex in auto mode."""

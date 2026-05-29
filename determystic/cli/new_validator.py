@@ -21,7 +21,6 @@ from determystic.agents.create_validator import StreamEvent
 from determystic.agents.local_agent import (
     LocalAgentExecutionError,
     LocalAgentSelectionError,
-    get_local_agent_preference,
     select_local_agent,
     stream_create_validator_with_local_agent,
 )
@@ -127,8 +126,7 @@ async def new_validator_command(path: Path | None):
 
     config_manager = ProjectConfigManager.load_from_disk()
     try:
-        agent_preference = get_local_agent_preference(config_manager.settings)
-        selected_agent = select_local_agent(agent_preference)
+        selected_agent = select_local_agent(config_manager.settings.validator_agent)
     except LocalAgentSelectionError as e:
         console.print(f"[red]{e}[/red]")
         sys.exit(1)
