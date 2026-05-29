@@ -16,7 +16,6 @@ from determystic.agents.create_validator import (
     AgentDependencies,
     StreamEvent,
     SYSTEM_PROMPT,
-    TASK_PROMPT_TEMPLATE,
 )
 from determystic.isolated_env import IsolatedEnv
 
@@ -26,6 +25,71 @@ LocalAgentPreference = Literal["auto", "codex", "claude"]
 DEFAULT_LOCAL_AGENT_PREFERENCE: LocalAgentPreference = "auto"
 LOCAL_AGENT_ORDER: tuple[LocalAgentName, ...] = ("codex", "claude")
 LOCAL_AGENT_SETTINGS_KEY = "validator_agent"
+
+LOCAL_AGENT_SYSTEM_PROMPT = SYSTEM_PROMPT.split("## Tool Usage Instructions", maxsplit=1)[0].strip()
+
+LOCAL_AGENT_INSTRUCTIONS_TEMPLATE = """## Local CLI Instructions
+
+You are running inside a temporary workspace for determystic.
+
+Create exactly these two files in the current directory:
+- validator.py
+- test_validator.py
+
+Do not modify any other files. The caller will read these files and run them in an isolated
+determystic test environment after your command exits.
+
+If file editing is unavailable, include fallback fenced blocks in your final answer:
+```validator.py
+<validator contents>
+```
+```test_validator.py
+<test contents>
+```
+
+The current `determystic.external` interface is:
+```python
+{external_interface}
+```
+
+Key reminders:
+- The validator should flag problematic code with `is_valid=False`.
+- Focus on the specific issue described by the user.
+- Keep examples minimal and directly related to the AST pattern.
+- The caller will run the generated tests after your command exits.
+"""
+
+LOCAL_AGENT_TASK_PROMPT_TEMPLATE = """Create a comprehensive AST validator and test suite.
+
+User-provided code that SHOULD BE DETECTED as problematic:
+```python
+{user_code}
+```
+
+Issue Description: {requirements}
+
+**CRITICAL: If the provided code is large or complex, extract ONLY the minimal portions that demonstrate the problematic pattern. Focus on creating the smallest possible reproduction case that still exhibits the issue.**
+
+IMPORTANT: The validator should return is_valid=False (flag as problematic) when it finds code matching the described issue.
+
+Please:
+1. **Extract minimal examples**: If the user-provided code is lengthy, identify and extract only the core patterns that need to be detected
+2. Implement the validator that detects when code matches the problematic pattern described
+3. Create comprehensive pytest tests including:
+   - A test with the essential parts of the user-provided code (should be flagged as problematic)
+   - Additional minimal examples of the problematic pattern (should be flagged)
+   - Simple examples of valid code that should NOT be flagged
+   - Edge cases and boundary conditions (keep these concise)
+4. Ensure the tests are executable by pytest; the caller will run them after this command exits
+5. The validator should identify the SPECIFIC issue described, not general code quality
+
+Remember: Focus on minimal viable reproduction cases for both good and bad behavior within the AST parsing and testing framework.
+"""
+
+LOCAL_AGENT_RETRY_PROMPT_TEMPLATE = """The previous attempt failed validation or tests. Fix the files using this feedback:
+
+{previous_failure}
+"""
 
 
 class LocalAgentSelectionError(RuntimeError):
@@ -44,11 +108,6 @@ class LocalAgentResult(BaseModel):
     test_contents: str = Field(description="Generated pytest code")
     tests_passed: bool = Field(default=False, description="Whether generated tests passed")
     test_output: str = Field(default="", description="Output from generated tests")
-
-
-def _local_system_prompt() -> str:
-    """Return validator instructions without Pydantic AI tool-specific directions."""
-    return SYSTEM_PROMPT.split("## Tool Usage Instructions", maxsplit=1)[0].strip()
 
 
 def _external_interface() -> str:
@@ -107,60 +166,19 @@ def select_local_agent(
 
 
 def _build_prompt(user_code: str, requirements: str | None, previous_failure: str | None = None) -> str:
-    task_prompt = TASK_PROMPT_TEMPLATE.format(
+    task_prompt = LOCAL_AGENT_TASK_PROMPT_TEMPLATE.format(
         user_code=user_code,
         requirements=requirements or "Detect issues in the provided code",
     )
-    task_prompt = task_prompt.replace(
-        "4. Run the tests to ensure everything works correctly",
-        "4. Ensure the tests are executable by pytest; the caller will run them after this command exits",
-    ).replace(
-        "6. Finalize the implementation once all tests pass\n",
-        "",
+    local_instructions = LOCAL_AGENT_INSTRUCTIONS_TEMPLATE.format(
+        external_interface=_external_interface(),
     )
-    external_interface = _external_interface()
-    prompt = f"""{_local_system_prompt()}
-
-## Local CLI Instructions
-
-You are running inside a temporary workspace for determystic.
-
-Create exactly these two files in the current directory:
-- validator.py
-- test_validator.py
-
-Do not modify any other files. The caller will read these files and run them in an isolated
-determystic test environment after your command exits.
-
-If file editing is unavailable, include fallback fenced blocks in your final answer:
-```validator.py
-<validator contents>
-```
-```test_validator.py
-<test contents>
-```
-
-The current `determystic.external` interface is:
-```python
-{external_interface}
-```
-
-Key reminders:
-- The validator should flag problematic code with `is_valid=False`.
-- Focus on the specific issue described by the user.
-- Keep examples minimal and directly related to the AST pattern.
-- The caller will run the generated tests after your command exits.
-
-{task_prompt}
-"""
+    prompt_sections = [LOCAL_AGENT_SYSTEM_PROMPT, local_instructions, task_prompt]
     if previous_failure:
-        prompt += f"""
-
-The previous attempt failed validation or tests. Fix the files using this feedback:
-
-{previous_failure}
-"""
-    return prompt
+        prompt_sections.append(
+            LOCAL_AGENT_RETRY_PROMPT_TEMPLATE.format(previous_failure=previous_failure)
+        )
+    return "\n\n".join(prompt_sections)
 
 
 def _build_agent_command(agent_name: LocalAgentName, workdir: Path, output_path: Path) -> list[str]:

@@ -7,6 +7,7 @@ import pytest
 
 from determystic.agents.local_agent import (
     LocalAgentSelectionError,
+    _build_prompt,
     create_validator_with_local_agent,
     get_local_agent_preference,
     normalize_local_agent_preference,
@@ -92,6 +93,22 @@ def test_validator():
 
     assert "DeterministicTraverser" in validator
     assert "def test_validator" in tests
+
+
+def test_build_prompt_uses_local_cli_instructions() -> None:
+    """The local prompt should not depend on Pydantic-agent tool instructions."""
+    with patch("determystic.agents.local_agent._external_interface", return_value="class X: pass"):
+        prompt = _build_prompt(
+            user_code="value = None",
+            requirements="detect None assignment",
+            previous_failure="tests failed",
+        )
+
+    assert "Create exactly these two files" in prompt
+    assert "Ensure the tests are executable by pytest" in prompt
+    assert "read_external_file" not in prompt
+    assert "Run the tests to ensure everything works correctly" not in prompt
+    assert "tests failed" in prompt
 
 
 def test_create_validator_with_local_agent_retries_failed_tests() -> None:
