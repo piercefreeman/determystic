@@ -20,22 +20,6 @@ BUNDLED_VALIDATOR_NAMES = {
 }
 
 
-def _normalize_validator_selector(value: str) -> str:
-    return value.strip().lower().replace("-", "_").replace(" ", "_")
-
-
-def _validator_selectors(validator: "BaseValidator") -> set[str]:
-    return {
-        _normalize_validator_selector(validator.name),
-        _normalize_validator_selector(validator.display_name),
-    }
-
-
-def is_bundled_validator(validator: "BaseValidator") -> bool:
-    """Return whether a validator is bundled with determystic."""
-    return _normalize_validator_selector(validator.name) in BUNDLED_VALIDATOR_NAMES
-
-
 def is_validator_enabled(
     validator: "BaseValidator",
     project_config: ProjectConfigManager,
@@ -49,7 +33,7 @@ def is_validator_enabled(
     if validator_selectors & excluded:
         return False
 
-    if not is_bundled_validator(validator):
+    if not _is_bundled_validator(validator):
         return True
 
     enabled = {
@@ -104,3 +88,19 @@ def load_project_config(path: Path | None = None) -> ProjectConfigManager:
         ProjectConfigManager.set_runtime_custom_path(path)
     
     return ProjectConfigManager.load_from_disk()
+
+
+def _normalize_validator_selector(value: str) -> str:
+    return value.strip().lower().replace("-", "_").replace(" ", "_")
+
+
+def _validator_selectors(validator: "BaseValidator") -> set[str]:
+    return {
+        _normalize_validator_selector(validator.name),
+        _normalize_validator_selector(validator.display_name),
+    }
+
+
+def _is_bundled_validator(validator: "BaseValidator") -> bool:
+    """Return whether a validator is bundled with determystic."""
+    return _normalize_validator_selector(validator.name) in BUNDLED_VALIDATOR_NAMES

@@ -9,7 +9,7 @@ from determystic.agents.local_agent import (
     LocalAgentExecutionError,
     LocalAgentSelectionError,
     _build_prompt,
-    create_validator_with_local_agent,
+    _create_validator_with_local_agent,
     select_local_agent,
     _read_generated_files,
 )
@@ -95,7 +95,7 @@ def test_create_validator_with_local_agent_retries_failed_tests() -> None:
                 (True, "tests passed"),
             ]
 
-            result = create_validator_with_local_agent(
+            result = _create_validator_with_local_agent(
                 user_code="x = 1",
                 requirements="detect x",
                 agent_name="codex",

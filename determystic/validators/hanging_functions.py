@@ -173,16 +173,16 @@ class ArgumentUsageCollector(ast.NodeVisitor):
         self.generic_visit(node)
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
-        return
+        self.generic_visit(node)
 
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
-        return
+        self.generic_visit(node)
 
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
-        return
+        self.generic_visit(node)
 
     def visit_Lambda(self, node: ast.Lambda) -> None:
-        return
+        self.generic_visit(node)
 
 
 class DefinitionCollector(ast.NodeVisitor):
@@ -239,6 +239,9 @@ class DefinitionCollector(ast.NodeVisitor):
         )
 
         if is_dunder or node.decorator_list:
+            return
+
+        if is_method and node.name.startswith("visit_"):
             return
 
         usage_collector = ArgumentUsageCollector()

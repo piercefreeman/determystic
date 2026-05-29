@@ -61,7 +61,7 @@ class ValidationResult:
         return "\n".join(parts)
 
 
-def find_pattern_in_code(code: str, pattern: str, filename: str = "<string>") -> list[ValidationIssue]:
+def find_pattern_in_code(code: str, pattern: str, filename: str = "<string>") -> list[ValidationIssue]:  # determystic: used
     """
     Find all occurrences of a pattern in code and return ValidationIssues with line context.
     
@@ -170,7 +170,7 @@ class DeterministicTraverser(ast.NodeVisitor):
         self.errors: list[ValidationIssue] = []
         self._lines = code.split('\n')
     
-    def add_error(
+    def add_error(  # determystic: used
         self, 
         node: ast.AST, 
         message: str, 

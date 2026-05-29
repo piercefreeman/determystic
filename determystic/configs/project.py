@@ -194,7 +194,7 @@ class ProjectConfigManager(BaseConfig):
         
         return validator_file
     
-    def delete_validation(self, name: str) -> bool:
+    def delete_validation(self, name: str) -> bool:  # determystic: used
         """Remove a validator from the project configuration.
         
         Args:

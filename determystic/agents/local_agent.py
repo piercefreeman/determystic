@@ -100,15 +100,6 @@ class LocalAgentResult(BaseModel):
     test_output: str = Field(default="", description="Output from generated tests")
 
 
-def _external_interface() -> str:
-    """Read the external validator interface for local CLI agents."""
-    external_path = Path(__file__).resolve().parents[1] / "external.py"
-    try:
-        return external_path.read_text()
-    except OSError:
-        return ""
-
-
 def select_local_agent(
     preference: ValidatorAgentPreference,
     which: Callable[[str], str | None] = shutil.which,
@@ -129,6 +120,56 @@ def select_local_agent(
         "No supported local coding agent was found on PATH. Install Codex or Claude Code, "
         f"or set [tool.determystic.settings].{LOCAL_AGENT_SETTINGS_KEY} to an installed agent."
     )
+
+
+async def stream_create_validator_with_local_agent(
+    user_code: str,
+    requirements: str | None,
+    agent_name: LocalAgentName,
+) -> AsyncGenerator[StreamEvent, None]:
+    """Stream coarse progress events while a local CLI agent creates a validator."""
+    deps = AgentDependencies()
+
+    yield StreamEvent(
+        event_type="user_prompt",
+        content=f"Creating validator with local {agent_name} agent",
+        deps=deps,
+    )
+    yield StreamEvent(
+        event_type="model_request_start",
+        content=f"{agent_name} is generating validator files...",
+        deps=deps,
+    )
+
+    result = await asyncio.to_thread(
+        _create_validator_with_local_agent,
+        user_code,
+        requirements,
+        agent_name,
+    )
+
+    deps.validation_contents = result.validation_contents
+    deps.test_contents = result.test_contents
+
+    yield StreamEvent(
+        event_type="tool_call_end",
+        content="Generated validator tests passed in the isolated environment.",
+        deps=deps,
+    )
+    yield StreamEvent(
+        event_type="final_result",
+        content=result.summary,
+        deps=deps,
+    )
+
+
+def _external_interface() -> str:
+    """Read the external validator interface for local CLI agents."""
+    external_path = Path(__file__).resolve().parents[1] / "external.py"
+    try:
+        return external_path.read_text()
+    except OSError:
+        return ""
 
 
 def _build_prompt(user_code: str, requirements: str | None, previous_failure: str | None = None) -> str:
@@ -224,7 +265,7 @@ def _run_agent_once(
     return output.strip(), validation_contents, test_contents
 
 
-def create_validator_with_local_agent(
+def _create_validator_with_local_agent(
     user_code: str,
     requirements: str | None,
     agent_name: LocalAgentName,
@@ -268,43 +309,3 @@ def create_validator_with_local_agent(
 
         raise LocalAgentExecutionError(previous_failure or "Local agent failed to generate a validator.")
 
-
-async def stream_create_validator_with_local_agent(
-    user_code: str,
-    requirements: str | None,
-    agent_name: LocalAgentName,
-) -> AsyncGenerator[StreamEvent, None]:
-    """Stream coarse progress events while a local CLI agent creates a validator."""
-    deps = AgentDependencies()
-
-    yield StreamEvent(
-        event_type="user_prompt",
-        content=f"Creating validator with local {agent_name} agent",
-        deps=deps,
-    )
-    yield StreamEvent(
-        event_type="model_request_start",
-        content=f"{agent_name} is generating validator files...",
-        deps=deps,
-    )
-
-    result = await asyncio.to_thread(
-        create_validator_with_local_agent,
-        user_code,
-        requirements,
-        agent_name,
-    )
-
-    deps.validation_contents = result.validation_contents
-    deps.test_contents = result.test_contents
-
-    yield StreamEvent(
-        event_type="tool_call_end",
-        content="Generated validator tests passed in the isolated environment.",
-        deps=deps,
-    )
-    yield StreamEvent(
-        event_type="final_result",
-        content=result.summary,
-        deps=deps,
-    )
