@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from determystic.configs.project import ProjectConfigManager
+from determystic.path_filters import is_test_file, iter_python_files
 from determystic.validators.base import BaseValidator, ValidationResult
 
 
@@ -16,7 +17,6 @@ MARKER_NAMES = {
     "test-exception",
     "test-exceptions",
 }
-TEST_PATH_PARTS = {"tests", "__tests__"}
 
 
 @dataclass(frozen=True)
@@ -148,13 +148,20 @@ class TestFunctionCollector(ast.NodeVisitor):
 class ExceptionCoverageValidator(BaseValidator):
     """Validator that ensures production except handlers are covered by test markers."""
 
-    def __init__(self, *, name: str = "exception_coverage", path: Path | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        name: str = "exception_coverage",
+        path: Path | None = None,
+        ignore_paths: list[str] | None = None,
+    ) -> None:
         super().__init__(name=name, path=path)
+        self.ignore_paths = ignore_paths or []
 
     @classmethod
     def create_validators(cls, config_manager: ProjectConfigManager) -> list["BaseValidator"]:
         """Factory function that creates a single exception coverage validator."""
-        return [cls(path=config_manager.project_root)]
+        return [cls(path=config_manager.project_root, ignore_paths=config_manager.ignore_paths)]
 
     async def validate(self) -> ValidationResult:
         """Validate exception handler coverage markers across the project."""
@@ -172,17 +179,13 @@ class ExceptionCoverageValidator(BaseValidator):
         return ValidationResult(success=False, output="\n".join(issues))
 
     def _get_production_python_files(self, path: Path) -> list[Path]:
-        return [
-            py_file
-            for py_file in path.rglob("*.py")
-            if _is_relevant_python_file(py_file) and not _is_test_file(py_file)
-        ]
+        return iter_python_files(path, self.ignore_paths, include_tests=False)
 
     def _get_test_python_files(self, path: Path) -> list[Path]:
         return [
             py_file
-            for py_file in path.rglob("*.py")
-            if _is_relevant_python_file(py_file) and _is_test_file(py_file)
+            for py_file in iter_python_files(path, self.ignore_paths)
+            if is_test_file(py_file)
         ]
 
     def _collect_requirements(self, python_files: list[Path]) -> list[ExceptionRequirement]:
@@ -490,18 +493,3 @@ def _module_name_for_file(py_file: Path, project_root: Path) -> str:
     if parts and parts[-1] == "__init__":
         parts = parts[:-1]
     return ".".join(parts) if parts else py_file.stem
-
-
-def _is_relevant_python_file(py_file: Path) -> bool:
-    return (
-        not any(part.startswith(".") for part in py_file.parts)
-        and "__pycache__" not in py_file.parts
-    )
-
-
-def _is_test_file(py_file: Path) -> bool:
-    return (
-        py_file.name.startswith("test_")
-        or py_file.name.endswith("_test.py")
-        or any(part in TEST_PATH_PARTS for part in py_file.parts)
-    )

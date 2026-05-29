@@ -311,6 +311,7 @@ version = "2.0"
 project_name = "configured_project"
 exclude = ["Static Analysis"]
 enabled = ["Function Visibility"]
+ignore_paths = ["generated/", "vendor/client.py"]
 
 [tool.determystic.settings]
 debug = true
@@ -324,8 +325,17 @@ validator_agent = "Codex"
                 assert config.project_name == "configured_project"
                 assert config.exclude == ["Static Analysis"]
                 assert config.enabled == ["Function Visibility"]
+                assert config.ignore_paths == ["generated/", "vendor/client.py"]
                 assert config.settings.validator_agent == "codex"
                 assert config.settings.model_extra == {"debug": True}
+
+    def test_load_from_pyproject_accepts_ignored_paths_alias(self) -> None:
+        """The older descriptive ignored_paths key maps to ignore_paths."""
+        config = ProjectConfigManager.model_validate(
+            {"ignored_paths": ["generated/"]}
+        )
+
+        assert config.ignore_paths == ["generated/"]
 
     def test_project_settings_accepts_legacy_agent_alias(self) -> None:
         """Test loading the old agent key into the typed validator_agent setting."""

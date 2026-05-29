@@ -215,6 +215,32 @@ def public_api():
         assert result.success
         assert result.output == "No Python files found"
 
+    @pytest.mark.asyncio
+    async def test_validate_respects_configured_ignore_paths(
+        self,
+        temp_project_dir: Path,
+    ) -> None:
+        """Configured ignore paths exclude Python files from visibility analysis."""
+        generated_dir = temp_project_dir / "generated"
+        generated_dir.mkdir()
+        (generated_dir / "service.py").write_text("""
+def helper():
+    return "ok"
+
+
+def public_api():
+    return helper()
+""")
+
+        validator = FunctionVisibilityValidator(
+            path=temp_project_dir,
+            ignore_paths=["generated/"],
+        )
+        result = await validator.validate()
+
+        assert result.success
+        assert result.output == "No Python files found"
+
     # determystic: tested-exceptions[determystic.validators.function_visibility.FunctionVisibilityValidator._build_project_index: SyntaxError, UnicodeDecodeError]
     def test_build_project_index_skips_unparseable_files(
         self,

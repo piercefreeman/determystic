@@ -198,6 +198,31 @@ def test_load_config_handles_missing_file():
         assert not result.success
         assert "must be immediately above a test function" in result.output
 
+    @pytest.mark.asyncio
+    async def test_validate_respects_configured_ignore_paths(
+        self,
+        temp_project_dir: Path,
+    ) -> None:
+        """Configured ignore paths exclude production and test files."""
+        generated_dir = temp_project_dir / "generated"
+        generated_dir.mkdir()
+        (generated_dir / "service.py").write_text("""
+def load_config():
+    try:
+        return read_config()
+    except FileNotFoundError:
+        return {}
+""")
+
+        validator = ExceptionCoverageValidator(
+            path=temp_project_dir,
+            ignore_paths=["generated/"],
+        )
+        result = await validator.validate()
+
+        assert result.success
+        assert result.output == "All except handlers are marked as tested"
+
     # determystic: tested-exceptions[determystic.validators.exception_coverage.ExceptionCoverageValidator._parse_python_file: SyntaxError, UnicodeDecodeError]
     def test_parse_python_file_skips_unparseable_files(self, tmp_path: Path) -> None:
         """The validator skips files it cannot parse as Python source."""

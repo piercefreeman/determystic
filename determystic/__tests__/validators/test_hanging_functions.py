@@ -301,6 +301,27 @@ version = "1.0"
         assert result.output.count("hanging_function") == 1
 
     @pytest.mark.asyncio
+    async def test_validate_respects_configured_ignore_paths(
+        self,
+        temp_project_dir: Path,
+        sample_code_with_hanging_function: str,
+    ) -> None:
+        """Configured ignore paths exclude Python files from dead-code analysis."""
+        generated_dir = temp_project_dir / "generated"
+        generated_dir.mkdir()
+        ignored_file = generated_dir / "client.py"
+        ignored_file.write_text(sample_code_with_hanging_function)
+
+        validator = HangingFunctionsValidator(
+            path=temp_project_dir,
+            ignore_paths=["generated/"],
+        )
+        result = await validator.validate()
+
+        assert result.success
+        assert "No Python files found" in result.output
+
+    @pytest.mark.asyncio
     async def test_validate_with_script_entrypoints(
         self, 
         temp_project_dir: Path,

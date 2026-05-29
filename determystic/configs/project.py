@@ -70,6 +70,10 @@ class ProjectConfigManager(BaseConfig):
         default_factory=list,
         description="List of bundled validators to enable. Custom validators are enabled by default.",
     )
+    ignore_paths: list[str] = Field(
+        default_factory=list,
+        description="Project-relative files, directories, or glob patterns to ignore during validation.",
+    )
     
     # Validator files tracking
     validators: dict[str, ValidatorFile] = Field(
@@ -84,6 +88,18 @@ class ProjectConfigManager(BaseConfig):
     )
 
     runtime_custom_path: ClassVar[Path | None] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def migrate_ignore_paths_alias(cls, data: Any) -> Any:
+        """Accept the descriptive `ignored_paths` alias for `ignore_paths`."""
+        if not isinstance(data, dict):
+            return data
+
+        values = dict(data)
+        if "ignore_paths" not in values and "ignored_paths" in values:
+            values["ignore_paths"] = values.pop("ignored_paths")
+        return values
 
     @classmethod
     def set_runtime_custom_path(cls, path: Path) -> None:

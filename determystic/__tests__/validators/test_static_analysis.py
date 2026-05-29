@@ -29,6 +29,7 @@ class TestStaticAnalysisValidator:
         # Mock ProjectConfigManager
         mock_config_manager = MagicMock(spec=ProjectConfigManager)
         mock_config_manager.project_root = path
+        mock_config_manager.ignore_paths = []
         
         validators = StaticAnalysisValidator.create_validators(mock_config_manager)
         
@@ -43,6 +44,38 @@ class TestStaticAnalysisValidator:
         ty_validator = validators[1]
         assert isinstance(ty_validator, StaticAnalysisValidator)
         assert ty_validator.command == ["ty", "check", str(path)]
+
+    def test_create_validators_passes_ignore_paths_to_tools(self) -> None:
+        """Configured ignore paths are translated to external tool excludes."""
+        path = Path("/test/path")
+
+        mock_config_manager = MagicMock(spec=ProjectConfigManager)
+        mock_config_manager.project_root = path
+        mock_config_manager.ignore_paths = ["generated/", "vendor/client.py"]
+
+        validators = StaticAnalysisValidator.create_validators(mock_config_manager)
+
+        assert validators[0].command == [
+            "ruff",
+            "check",
+            str(path),
+            "--no-fix",
+            "--extend-exclude",
+            "generated/",
+            "--extend-exclude",
+            "vendor/client.py",
+            "--force-exclude",
+        ]
+        assert validators[1].command == [
+            "ty",
+            "check",
+            str(path),
+            "--exclude",
+            "generated/",
+            "--exclude",
+            "vendor/client.py",
+            "--force-exclude",
+        ]
 
     @pytest.mark.asyncio
     async def test_validate_success(self) -> None:

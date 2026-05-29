@@ -104,7 +104,7 @@ Determystic includes bundled validators that can replace parts of a conventional
 
 ## Configuration
 
-You can customize which validators run in your project by adding a `[tool.determystic]` section to your project `pyproject.toml`. The configuration supports enabling bundled validators and excluding specific validators from running.
+You can customize which validators run in your project by adding a `[tool.determystic]` section to your project `pyproject.toml`. The configuration supports enabling bundled validators, excluding specific validators from running, and ignoring generated or vendored paths.
 Generated custom validator metadata is also tracked in this section; the generated validator source files still live under `.determystic/`.
 
 ### Enabling Bundled Validators
@@ -121,6 +121,22 @@ enabled = [
 ```
 
 Use `enabled = ["all"]` to opt into every bundled validator explicitly.
+
+### Ignoring Files And Directories
+
+To skip generated, vendored, or otherwise out-of-scope code across all validators, add project-relative entries to `ignore_paths`:
+
+```toml
+# pyproject.toml
+[tool.determystic]
+ignore_paths = [
+    "generated/",
+    "vendor/client.py",
+    "build/**/*.py"
+]
+```
+
+Directory entries ignore everything below that directory. Glob-style entries are also supported.
 
 ### Excluding Validators
 

@@ -458,6 +458,31 @@ def test_function():
         assert "regular_code.py" in result.output
         assert "hidden_code.py" not in result.output
 
+    @pytest.mark.asyncio
+    async def test_validate_respects_configured_ignore_paths(
+        self,
+        temp_project_dir: Path,
+        sample_python_code_with_issues: str,
+    ) -> None:
+        """Configured ignore paths exclude Python files from custom validators."""
+        generated_dir = temp_project_dir / "generated"
+        generated_dir.mkdir()
+        ignored_file = generated_dir / "client.py"
+        ignored_file.write_text(sample_python_code_with_issues)
+
+        validator = DynamicASTValidator(
+            name="test_validator",
+            validator_path=Path("dummy"),
+            path=temp_project_dir,
+            ignore_paths=["generated/"],
+        )
+        validator.traverser_class = MockTraverserSingleArg
+
+        result = await validator.validate()
+
+        assert result.success
+        assert "No Python files found" in result.output
+
     def test_display_name_property(self, temp_project_dir: Path) -> None:
         """Test that display_name property formats the name correctly."""
         validator = DynamicASTValidator(

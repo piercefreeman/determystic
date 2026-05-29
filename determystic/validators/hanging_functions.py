@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from determystic.configs.project import ProjectConfigManager
+from determystic.path_filters import iter_python_files
 from determystic.suppressions import SuppressionComments
 from determystic.validators.base import BaseValidator, ValidationResult
 
@@ -275,13 +276,20 @@ class UnreachableCodeCollector(ast.NodeVisitor):
 class HangingFunctionsValidator(BaseValidator):
     """Validator that detects unused definitions, arguments, and unreachable code."""
 
-    def __init__(self, *, name: str = "hanging_functions", path: Path | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        name: str = "hanging_functions",
+        path: Path | None = None,
+        ignore_paths: list[str] | None = None,
+    ) -> None:
         super().__init__(name=name, path=path)
+        self.ignore_paths = ignore_paths or []
 
     @classmethod
     def create_validators(cls, config_manager: ProjectConfigManager) -> list["BaseValidator"]:
         """Factory function that creates a single dead-code validator instance."""
-        return [cls(path=config_manager.project_root)]
+        return [cls(path=config_manager.project_root, ignore_paths=config_manager.ignore_paths)]
 
     async def validate(self) -> ValidationResult:
         """Validate the codebase for dead code."""
@@ -344,27 +352,7 @@ class HangingFunctionsValidator(BaseValidator):
 
     def _get_python_files(self, path: Path) -> list[Path]:
         """Get all Python files, excluding test files and hidden directories."""
-        python_files = list(path.rglob("*.py"))
-
-        filtered_files = []
-        for py_file in python_files:
-            if any(part.startswith(".") for part in py_file.parts):
-                continue
-            if "__pycache__" in py_file.parts:
-                continue
-
-            file_name = py_file.name
-            if (
-                file_name.startswith("test_")
-                or file_name.endswith("_test.py")
-                or "__tests__" in py_file.parts
-                or "tests" in py_file.parts
-            ):
-                continue
-
-            filtered_files.append(py_file)
-
-        return filtered_files
+        return iter_python_files(path, self.ignore_paths, include_tests=False)
 
     def _get_script_entrypoints(self, path: Path) -> set[str]:
         """Extract script entrypoint function names from pyproject.toml."""

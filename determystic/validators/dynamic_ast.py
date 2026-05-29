@@ -6,6 +6,7 @@ from typing import Type
 
 from determystic.configs.project import ProjectConfigManager
 from determystic.external import DeterministicTraverser
+from determystic.path_filters import iter_python_files
 from determystic.suppressions import SuppressionComments
 from determystic.validators.base import BaseValidator, ValidationResult
 from determystic.logging import CONSOLE
@@ -14,9 +15,17 @@ from determystic.logging import CONSOLE
 class DynamicASTValidator(BaseValidator):
     """Loads and runs custom AST validators from .determystic files."""
     
-    def __init__(self, *, name: str, validator_path: Path, path: Path | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        name: str,
+        validator_path: Path,
+        path: Path | None = None,
+        ignore_paths: list[str] | None = None,
+    ) -> None:
         super().__init__(name=name, path=path)
         self.validator_path = validator_path
+        self.ignore_paths = ignore_paths or []
         self.traverser_class = self._load_validator_module(validator_path)
     
     @classmethod
@@ -35,7 +44,8 @@ class DynamicASTValidator(BaseValidator):
             validator = cls(
                 name=validator_file.name,
                 validator_path=validator_path,
-                path=config_manager.project_root
+                path=config_manager.project_root,
+                ignore_paths=config_manager.ignore_paths,
             )
             
             # Only add if the traverser class was successfully loaded
@@ -54,8 +64,7 @@ class DynamicASTValidator(BaseValidator):
             )
         
         # Find all Python files
-        python_files = list(self.path.rglob("*.py"))
-        python_files = [f for f in python_files if not any(part.startswith('.') for part in f.parts)]
+        python_files = iter_python_files(self.path, self.ignore_paths)
         
         if not python_files:
             return ValidationResult(success=True, output="No Python files found")

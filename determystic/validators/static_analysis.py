@@ -22,9 +22,22 @@ class StaticAnalysisValidator(BaseValidator):
     
     @classmethod
     def create_validators(cls, config_manager: ProjectConfigManager) -> list[BaseValidator]:
+        ruff_command = [
+            "ruff",
+            "check",
+            str(config_manager.project_root),
+            "--no-fix",
+            *_ruff_ignore_args(config_manager.ignore_paths),
+        ]
+        ty_command = [
+            "ty",
+            "check",
+            str(config_manager.project_root),
+            *_ty_ignore_args(config_manager.ignore_paths),
+        ]
         return [
-            cls(config_manager.project_root, ["ruff", "check", str(config_manager.project_root), "--no-fix"]),
-            cls(config_manager.project_root, ["ty", "check", str(config_manager.project_root)])
+            cls(config_manager.project_root, ruff_command),
+            cls(config_manager.project_root, ty_command),
         ]   
     
     async def validate(self) -> ValidationResult:
@@ -41,3 +54,29 @@ class StaticAnalysisValidator(BaseValidator):
             success=process.returncode == 0,
             output=stdout.decode() if stdout else stderr.decode()
         )
+
+
+def _ruff_ignore_args(ignore_paths: list[str]) -> list[str]:
+    args: list[str] = []
+    for ignore_path in ignore_paths:
+        if not ignore_path.strip():
+            continue
+        args.extend(["--extend-exclude", _normalize_cli_ignore_path(ignore_path)])
+    if args:
+        args.append("--force-exclude")
+    return args
+
+
+def _ty_ignore_args(ignore_paths: list[str]) -> list[str]:
+    args: list[str] = []
+    for ignore_path in ignore_paths:
+        if not ignore_path.strip():
+            continue
+        args.extend(["--exclude", _normalize_cli_ignore_path(ignore_path)])
+    if args:
+        args.append("--force-exclude")
+    return args
+
+
+def _normalize_cli_ignore_path(ignore_path: str) -> str:
+    return ignore_path.strip().replace("\\", "/")
