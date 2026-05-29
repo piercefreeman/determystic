@@ -134,9 +134,9 @@ exclude = [
 ]
 ```
 
-### Dead Code Suppressions
+### Suppression Comments
 
-The `hanging_functions` validator is intended as a focused Vulture replacement when enabled. Mark externally used definitions or callback signatures with inline comments:
+Determystic validators share one suppression comment format. Use it when a line, function, class, or block is intentionally used by framework/plugin code that local static analysis cannot see.
 
 ```python
 def public_plugin_hook(event, context):  # determystic: used
@@ -144,9 +144,16 @@ def public_plugin_hook(event, context):  # determystic: used
 
 def generated_path(value):  # determystic: ignore[unused-argument]
     return 1
+
+# determystic: ignore-start[function-visibility]
+def framework_registered_helper():
+    return "called dynamically"
+# determystic: ignore-end[function-visibility]
 ```
 
-Supported ignore codes include `unused-function`, `unused-method`, `unused-class`, `unused-argument`, `unreachable-code`, and `dead-code`.
+Line comments apply to that line and the next line. Comments on or immediately above a function/class definition apply to that whole definition. `ignore-start[...]` and `ignore-end[...]` suppress a block.
+
+Supported codes include `unused-function`, `unused-method`, `unused-class`, `unused-argument`, `unreachable-code`, `dead-code`, `private-prefix`, `function-order`, and `function-visibility`. Custom validators can also be suppressed by validator name.
 
 ### Agent Selection
 

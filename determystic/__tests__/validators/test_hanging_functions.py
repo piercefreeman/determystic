@@ -559,6 +559,43 @@ def hanging_function():
         assert "unreachable" not in result.output.lower()
 
     @pytest.mark.asyncio
+    async def test_validate_respects_function_and_block_suppression_comments(
+        self,
+        temp_project_dir: Path,
+    ) -> None:
+        """Test definition-level and block-level dead-code suppressions."""
+        python_code = '''
+# determystic: ignore[dead-code]
+def generated_callback(event, context):
+    return event
+    print("unreachable")
+
+# determystic: ignore-start[dead-code]
+class ExternalClass:
+    pass
+
+def external_function(unused_value):
+    return "external"
+# determystic: ignore-end[dead-code]
+
+def hanging_function():
+    return "still flagged"
+'''
+        python_file = temp_project_dir / "main.py"
+        python_file.write_text(python_code)
+
+        validator = HangingFunctionsValidator(path=temp_project_dir)
+        result = await validator.validate()
+
+        assert not result.success
+        assert "hanging_function" in result.output
+        assert "generated_callback" not in result.output
+        assert "ExternalClass" not in result.output
+        assert "external_function" not in result.output
+        assert "unused_value" not in result.output
+        assert "unreachable" not in result.output.lower()
+
+    @pytest.mark.asyncio
     async def test_validate_respects_explicit_exports(
         self,
         temp_project_dir: Path,

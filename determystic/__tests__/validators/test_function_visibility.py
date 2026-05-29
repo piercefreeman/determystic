@@ -213,6 +213,61 @@ def public_api():
         assert result.success
         assert result.output == "No Python files found"
 
+    @pytest.mark.asyncio
+    async def test_validate_respects_function_visibility_suppression_block(
+        self,
+        temp_project_dir: Path,
+    ) -> None:
+        """Function visibility findings can be suppressed with shared comments."""
+        (temp_project_dir / "service.py").write_text("""
+# determystic: ignore-start[function-visibility]
+def helper():
+    return "ok"
+
+
+def public_api():
+    return helper()
+# determystic: ignore-end[function-visibility]
+""")
+        (temp_project_dir / "consumer.py").write_text("""
+from service import public_api
+
+value = public_api()
+""")
+
+        validator = FunctionVisibilityValidator(path=temp_project_dir)
+        result = await validator.validate()
+
+        assert result.success
+        assert result.output == "No function visibility issues found"
+
+    @pytest.mark.asyncio
+    async def test_validate_respects_specific_function_visibility_suppressions(
+        self,
+        temp_project_dir: Path,
+    ) -> None:
+        """Specific suppression codes can target naming or ordering separately."""
+        (temp_project_dir / "service.py").write_text("""
+def helper():  # determystic: ignore[private-prefix]
+    return "ok"
+
+
+# determystic: ignore[function-order]
+def public_api():
+    return helper()
+""")
+        (temp_project_dir / "consumer.py").write_text("""
+from service import public_api
+
+value = public_api()
+""")
+
+        validator = FunctionVisibilityValidator(path=temp_project_dir)
+        result = await validator.validate()
+
+        assert result.success
+        assert result.output == "No function visibility issues found"
+
     def test_display_name_property(self, temp_project_dir: Path) -> None:
         """Test display name formatting."""
         validator = FunctionVisibilityValidator(path=temp_project_dir)

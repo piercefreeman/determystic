@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from determystic.configs.project import ProjectConfigManager
+from determystic.suppressions import SuppressionComments
 from determystic.validators.base import BaseValidator, ValidationResult
 
 
@@ -88,6 +89,7 @@ class ModuleInfo:
     module_bindings: dict[str, str] = field(default_factory=dict)
     symbol_bindings: dict[str, ImportedSymbol] = field(default_factory=dict)
     explicit_exports: set[str] = field(default_factory=set)
+    suppressions: SuppressionComments = field(default_factory=SuppressionComments.empty)
 
     @property
     def canonical_module(self) -> str:
@@ -496,6 +498,7 @@ class FunctionVisibilityValidator(BaseValidator):
                 relative_path=relative_path,
                 module_names=module_names,
                 tree=tree,
+                suppressions=SuppressionComments.from_source(content, tree),
             )
             modules_by_path[relative_path] = module
 
@@ -648,7 +651,10 @@ class FunctionVisibilityValidator(BaseValidator):
 
         for module in project.modules_by_path.values():
             for definition in self._all_definitions(module):
-                if self._requires_private_prefix(definition, module, references, script_entrypoints):
+                if (
+                    self._requires_private_prefix(definition, module, references, script_entrypoints)
+                    and not module.suppressions.suppresses(definition.line_number, "private-prefix")
+                ):
                     issues.append(self._format_naming_issue(definition))
 
             for definitions in module.definitions_by_parent.values():
@@ -692,6 +698,12 @@ class FunctionVisibilityValidator(BaseValidator):
                 continue
 
             if first_private_definition is not None:
+                if module.suppressions.suppresses(
+                    definition.line_number,
+                    "function-order",
+                    fallback_line=first_private_definition.line_number,
+                ):
+                    continue
                 issues.append(self._format_ordering_issue(definition, first_private_definition))
 
         return issues

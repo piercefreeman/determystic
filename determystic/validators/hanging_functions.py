@@ -7,23 +7,14 @@ legitimately look unused from inside a single codebase.
 """
 
 import ast
-import io
-import tokenize
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
 from determystic.configs.project import ProjectConfigManager
+from determystic.suppressions import SuppressionComments
 from determystic.validators.base import BaseValidator, ValidationResult
 
-GENERAL_SUPPRESSION_CODES = {"all", "dead-code", "unused"}
-USED_SUPPRESSION_CODES = {
-    "used",
-    "unused-function",
-    "unused-method",
-    "unused-class",
-    "unused-argument",
-}
 TERMINAL_STATEMENTS = (ast.Return, ast.Raise, ast.Break, ast.Continue)
 
 
@@ -60,77 +51,6 @@ class UnreachableStatement:
 
     module_path: str
     line_number: int
-
-
-class SuppressionComments:
-    """Lookup table for inline determystic suppression comments."""
-
-    def __init__(self, line_codes: dict[int, set[str]]) -> None:
-        self.line_codes = line_codes
-
-    @classmethod
-    def from_source(cls, source: str) -> "SuppressionComments":
-        line_codes: dict[int, set[str]] = {}
-
-        try:
-            tokens = tokenize.generate_tokens(io.StringIO(source).readline)
-            for token in tokens:
-                if token.type != tokenize.COMMENT:
-                    continue
-                codes = cls._parse_comment(token.string)
-                if codes:
-                    line_codes.setdefault(token.start[0], set()).update(codes)
-        except tokenize.TokenError:
-            return cls({})
-
-        return cls(line_codes)
-
-    @staticmethod
-    def _parse_comment(comment: str) -> set[str]:
-        marker = "determystic:"
-        marker_index = comment.lower().find(marker)
-        if marker_index == -1:
-            return set()
-
-        directive = comment[marker_index + len(marker):].strip()
-        lowered_directive = directive.lower()
-        if lowered_directive.startswith("used"):
-            return {"used"}
-        if not lowered_directive.startswith("ignore"):
-            return set()
-
-        start = directive.find("[")
-        end = directive.find("]", start + 1)
-        if start == -1 or end == -1:
-            return {"all"}
-
-        codes = {
-            _normalize_code(part)
-            for part in directive[start + 1:end].split(",")
-            if part.strip()
-        }
-        return codes or {"all"}
-
-    def suppresses(self, line_number: int, code: str, *, fallback_line: int | None = None) -> bool:
-        """Return whether a code is suppressed on the line or immediately above it."""
-        normalized_code = _normalize_code(code)
-        candidate_lines = [line_number, line_number - 1]
-        if fallback_line is not None:
-            candidate_lines.extend([fallback_line, fallback_line - 1])
-
-        for candidate_line in candidate_lines:
-            if candidate_line < 1:
-                continue
-            codes = self.line_codes.get(candidate_line, set())
-            if not codes:
-                continue
-            if codes & GENERAL_SUPPRESSION_CODES:
-                return True
-            if normalized_code in codes:
-                return True
-            if normalized_code.startswith("unused-") and codes & USED_SUPPRESSION_CODES:
-                return True
-        return False
 
 
 class ReferenceCollector(ast.NodeVisitor):
@@ -383,7 +303,7 @@ class HangingFunctionsValidator(BaseValidator):
                 content = py_file.read_text(encoding="utf-8")
                 tree = ast.parse(content, filename=str(py_file))
                 relative_path = str(py_file.relative_to(self.path))
-                suppressions = SuppressionComments.from_source(content)
+                suppressions = SuppressionComments.from_source(content, tree)
                 suppressions_by_module[relative_path] = suppressions
 
                 exported_names = self._collect_explicit_exports(tree.body)
@@ -500,7 +420,7 @@ class HangingFunctionsValidator(BaseValidator):
 
         for symbol in all_symbols:
             code = f"unused-{symbol.kind}"
-            suppressions = suppressions_by_module.get(symbol.module_path, SuppressionComments({}))
+            suppressions = suppressions_by_module.get(symbol.module_path, SuppressionComments.empty())
             if suppressions.suppresses(symbol.line_number, code):
                 continue
             if symbol.is_dunder or symbol.has_decorators or symbol.is_exported:
@@ -543,7 +463,7 @@ class HangingFunctionsValidator(BaseValidator):
         issues = []
 
         for argument in all_arguments:
-            suppressions = suppressions_by_module.get(argument.module_path, SuppressionComments({}))
+            suppressions = suppressions_by_module.get(argument.module_path, SuppressionComments.empty())
             if suppressions.suppresses(
                 argument.line_number,
                 "unused-argument",
@@ -565,7 +485,7 @@ class HangingFunctionsValidator(BaseValidator):
         issues = []
 
         for statement in all_unreachable:
-            suppressions = suppressions_by_module.get(statement.module_path, SuppressionComments({}))
+            suppressions = suppressions_by_module.get(statement.module_path, SuppressionComments.empty())
             if suppressions.suppresses(statement.line_number, "unreachable-code"):
                 continue
             issues.append(
@@ -574,10 +494,6 @@ class HangingFunctionsValidator(BaseValidator):
             )
 
         return issues
-
-
-def _normalize_code(value: str) -> str:
-    return value.strip().lower().replace("_", "-")
 
 
 def _iter_arguments(arguments: ast.arguments) -> list[ast.arg]:

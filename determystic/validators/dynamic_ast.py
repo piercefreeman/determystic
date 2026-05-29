@@ -6,6 +6,7 @@ from typing import Type
 
 from determystic.configs.project import ProjectConfigManager
 from determystic.external import DeterministicTraverser
+from determystic.suppressions import SuppressionComments
 from determystic.validators.base import BaseValidator, ValidationResult
 from determystic.logging import CONSOLE
 
@@ -65,6 +66,7 @@ class DynamicASTValidator(BaseValidator):
             try:
                 file_content = py_file.read_text()
                 relative_path = py_file.relative_to(self.path)
+                suppressions = SuppressionComments.from_source(file_content)
                 
                 # Run traverser - check signature to handle different constructor patterns
                 sig = inspect.signature(self.traverser_class.__init__)
@@ -80,6 +82,11 @@ class DynamicASTValidator(BaseValidator):
                 
                 if not result.is_valid and result.issues:
                     for issue in result.issues:
+                        if (
+                            suppressions.suppresses(issue.line_number, self.name)
+                            or suppressions.suppresses(issue.line_number, "dynamic_ast")
+                        ):
+                            continue
                         formatted_issue = f"{relative_path}:{issue.line_number}: {issue.message}"
                         if issue.code_snippet:
                             formatted_issue += f"\n{issue.code_snippet}"
