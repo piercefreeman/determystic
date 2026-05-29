@@ -18,18 +18,10 @@ def iter_python_files(
     return [
         py_file
         for py_file in project_root.rglob("*.py")
-        if is_relevant_python_file(py_file)
-        and not is_ignored_path(py_file, project_root, ignore_paths)
+        if _is_relevant_python_file(py_file)
+        and not _is_ignored_path(py_file, project_root, ignore_paths)
         and (include_tests or not is_test_file(py_file))
     ]
-
-
-def is_relevant_python_file(path: Path) -> bool:
-    """Return whether a Python file should be considered before config ignores."""
-    return (
-        not any(part.startswith(".") for part in path.parts)
-        and "__pycache__" not in path.parts
-    )
 
 
 def is_test_file(path: Path) -> bool:
@@ -41,7 +33,15 @@ def is_test_file(path: Path) -> bool:
     )
 
 
-def is_ignored_path(
+def _is_relevant_python_file(path: Path) -> bool:
+    """Return whether a Python file should be considered before config ignores."""
+    return (
+        not any(part.startswith(".") for part in path.parts)
+        and "__pycache__" not in path.parts
+    )
+
+
+def _is_ignored_path(
     path: Path,
     project_root: Path,
     ignore_paths: list[str] | tuple[str, ...] | None,

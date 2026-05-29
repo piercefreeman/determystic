@@ -2,6 +2,7 @@
 
 import asyncio
 from pathlib import Path
+from typing import cast
 from unittest.mock import AsyncMock, patch, MagicMock
 import pytest
 
@@ -55,7 +56,10 @@ class TestStaticAnalysisValidator:
 
         validators = StaticAnalysisValidator.create_validators(mock_config_manager)
 
-        assert validators[0].command == [
+        ruff_validator = cast(StaticAnalysisValidator, validators[0])
+        ty_validator = cast(StaticAnalysisValidator, validators[1])
+
+        assert ruff_validator.command == [
             "ruff",
             "check",
             str(path),
@@ -66,7 +70,7 @@ class TestStaticAnalysisValidator:
             "vendor/client.py",
             "--force-exclude",
         ]
-        assert validators[1].command == [
+        assert ty_validator.command == [
             "ty",
             "check",
             str(path),
