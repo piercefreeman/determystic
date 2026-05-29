@@ -6,6 +6,9 @@ validators should use for consistent error reporting and validation results.
 
 import ast
 from dataclasses import dataclass
+from typing import ClassVar
+
+from pydantic import BaseModel
 
 
 @dataclass
@@ -156,17 +159,27 @@ class DeterministicTraverser(ast.NodeVisitor):
     
     This class provides a structured way to traverse the AST and collect
     validation errors with proper line numbers and code context.
+    Set ``config_model`` to a Pydantic ``BaseModel`` subclass to receive typed
+    project configuration from ``[tool.determystic.validators.<name>.config]``.
     """
+    config_model: ClassVar[type[BaseModel] | None] = None
     
-    def __init__(self, code: str, filename: str = "<string>"):
+    def __init__(
+        self,
+        code: str,
+        filename: str = "<string>",
+        config: BaseModel | None = None,
+    ):
         """Initialize the traverser.
         
         Args:
             code: The source code being validated
             filename: Name of the file being validated
+            config: Optional typed validator configuration
         """
         self.code = code
         self.filename = filename
+        self.config = config
         self.errors: list[ValidationIssue] = []
         self._lines = code.split('\n')
     

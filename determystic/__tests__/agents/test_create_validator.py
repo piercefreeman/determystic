@@ -11,10 +11,12 @@ from determystic.agents.create_validator import (
     AgentDependencies,
     EditFileInput,
     FinalizeInput,
+    ReadExternalFileInput,
     ReadFileInput,
     RunTestsInput,
     WriteFileInput,
     create_ast_validator,
+    read_external_file,
     stream_create_validator,
 )
 
@@ -381,6 +383,24 @@ def test_clean_function():
         print(f"📊 Created {len(deps.files)} files:")
         for filename, content in deps.files.items():
             print(f"  📄 {filename}: {len(content)} characters")
+
+    # determystic: tested-exceptions[determystic.agents.create_validator.read_external_file: Exception]
+    @pytest.mark.asyncio
+    async def test_read_external_file_reports_read_errors(self):
+        """The read_external_file tool reports failures without raising."""
+        deps = AgentDependencies()
+
+        class MockRunContext:
+            def __init__(self, deps):
+                self.deps = deps
+
+        ctx = cast(RunContext[AgentDependencies], MockRunContext(deps))
+
+        with patch("builtins.open", side_effect=OSError("cannot read")):
+            result = await read_external_file(ctx, ReadExternalFileInput())
+
+        assert "Error reading external.py" in result
+        assert "cannot read" in result
 
 
 if __name__ == "__main__":

@@ -1,7 +1,9 @@
 """Tests for hanging functions validator functionality."""
 
 import tempfile
+import tomllib
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -299,6 +301,27 @@ version = "1.0"
         assert result.output.count("hanging_function") == 1
 
     @pytest.mark.asyncio
+    async def test_validate_respects_configured_ignore_paths(
+        self,
+        temp_project_dir: Path,
+        sample_code_with_hanging_function: str,
+    ) -> None:
+        """Configured ignore paths exclude Python files from dead-code analysis."""
+        generated_dir = temp_project_dir / "generated"
+        generated_dir.mkdir()
+        ignored_file = generated_dir / "client.py"
+        ignored_file.write_text(sample_code_with_hanging_function)
+
+        validator = HangingFunctionsValidator(
+            path=temp_project_dir,
+            ignore_paths=["generated/"],
+        )
+        result = await validator.validate()
+
+        assert result.success
+        assert "No Python files found" in result.output
+
+    @pytest.mark.asyncio
     async def test_validate_with_script_entrypoints(
         self, 
         temp_project_dir: Path,
@@ -335,6 +358,28 @@ def hanging_function():
         assert "cli" not in result.output
         assert "entry_point" not in result.output
 
+    # determystic: tested-exceptions[determystic.validators.hanging_functions.HangingFunctionsValidator._get_script_entrypoints: TOMLDecodeError, KeyError, ValueError]
+    def test_get_script_entrypoints_handles_pyproject_parse_errors(
+        self,
+        temp_project_dir: Path,
+    ) -> None:
+        """Malformed entrypoint configuration is treated as no entrypoints."""
+        pyproject_file = temp_project_dir / "pyproject.toml"
+        pyproject_file.write_text("[project]\n")
+        validator = HangingFunctionsValidator(path=temp_project_dir)
+
+        parse_errors = [
+            tomllib.TOMLDecodeError("bad toml", "bad", 0),
+            KeyError("scripts"),
+            ValueError("bad script"),
+        ]
+        for parse_error in parse_errors:
+            with patch(
+                "determystic.validators.hanging_functions.tomllib.load",
+                side_effect=parse_error,
+            ):
+                assert validator._get_script_entrypoints(temp_project_dir) == set()
+
     @pytest.mark.asyncio
     async def test_validate_no_python_files(self, temp_project_dir: Path) -> None:
         """Test validation when there are no Python files."""
@@ -345,6 +390,7 @@ def hanging_function():
         assert result.success
         assert "No Python files found" in result.output
 
+    # determystic: tested-exceptions[determystic.validators.hanging_functions.HangingFunctionsValidator.validate: SyntaxError, UnicodeDecodeError]
     @pytest.mark.asyncio
     async def test_validate_syntax_error_in_file(
         self, 
@@ -354,6 +400,9 @@ def hanging_function():
         # Create file with syntax error
         bad_file = temp_project_dir / "bad_syntax.py"
         bad_file.write_text("def broken_function(\n    # Missing closing parenthesis")
+
+        bad_unicode_file = temp_project_dir / "bad_unicode.py"
+        bad_unicode_file.write_bytes(b"\xff")
         
         # Create valid file with hanging function
         good_file = temp_project_dir / "good_file.py"

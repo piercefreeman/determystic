@@ -222,6 +222,107 @@ validator_path = ".determystic/validations/missing.determystic"
         # Should return empty list since file doesn't exist
         assert len(validators) == 0
 
+    @pytest.mark.asyncio
+    async def test_validate_passes_typed_config_to_custom_traverser(
+        self,
+        temp_project_dir: Path,
+    ) -> None:
+        """Custom validators can declare a Pydantic config model."""
+        validator_file = temp_project_dir / ".determystic" / "validations" / "configured.determystic"
+        validator_file.write_text('''
+import ast
+from pydantic import BaseModel
+from determystic.external import DeterministicTraverser
+
+class ConfiguredValidatorConfig(BaseModel):
+    forbidden_name: str = "bad_pattern"
+
+class ConfiguredValidator(DeterministicTraverser):
+    config_model = ConfiguredValidatorConfig
+
+    def __init__(self, code, filename="<string>", config=None):
+        super().__init__(code, filename, config=config)
+        self.typed_config = config or ConfiguredValidatorConfig()
+
+    def visit_Name(self, node):
+        if node.id == self.typed_config.forbidden_name:
+            self.add_error(node, f"Found configured name: {self.typed_config.forbidden_name}")
+        self.generic_visit(node)
+''')
+        config_path = temp_project_dir / "pyproject.toml"
+        config_path.write_text('''
+[tool.determystic]
+version = "1.0"
+[tool.determystic.validators.configured]
+name = "configured"
+validator_path = ".determystic/validations/configured.determystic"
+[tool.determystic.validators.configured.config]
+forbidden_name = "configured_bad"
+''')
+        python_file = temp_project_dir / "code.py"
+        python_file.write_text("""
+def run():
+    configured_bad = 1
+    return configured_bad
+""")
+
+        ProjectConfigManager.runtime_custom_path = None
+        ProjectConfigManager._found_path = None
+        ProjectConfigManager.set_runtime_custom_path(temp_project_dir)
+        config_manager = ProjectConfigManager.load_from_disk()
+        validators = DynamicASTValidator.create_validators(config_manager)
+
+        assert len(validators) == 1
+        result = await validators[0].validate()
+
+        assert not result.success
+        assert "Found configured name: configured_bad" in result.output
+
+    # determystic: tested-exceptions[determystic.validators.dynamic_ast.DynamicASTValidator._load_traverser_config: Exception]
+    @pytest.mark.asyncio
+    async def test_validate_reports_invalid_custom_validator_config(
+        self,
+        temp_project_dir: Path,
+    ) -> None:
+        """Invalid config_model payloads fail validation with a clear result."""
+        validator_file = temp_project_dir / ".determystic" / "validations" / "configured.determystic"
+        validator_file.write_text('''
+from pydantic import BaseModel
+from determystic.external import DeterministicTraverser
+
+class ConfiguredValidatorConfig(BaseModel):
+    threshold: int
+
+class ConfiguredValidator(DeterministicTraverser):
+    config_model = ConfiguredValidatorConfig
+''')
+        config_path = temp_project_dir / "pyproject.toml"
+        config_path.write_text('''
+[tool.determystic]
+version = "1.0"
+[tool.determystic.validators.configured]
+name = "configured"
+validator_path = ".determystic/validations/configured.determystic"
+[tool.determystic.validators.configured.config]
+threshold = "not an int"
+''')
+        python_file = temp_project_dir / "code.py"
+        python_file.write_text("value = 1")
+
+        ProjectConfigManager.runtime_custom_path = None
+        ProjectConfigManager._found_path = None
+        ProjectConfigManager.set_runtime_custom_path(temp_project_dir)
+        config_manager = ProjectConfigManager.load_from_disk()
+        validators = DynamicASTValidator.create_validators(config_manager)
+
+        assert len(validators) == 1
+        result = await validators[0].validate()
+
+        assert not result.success
+        assert "Invalid config for validator 'configured'" in result.output
+        assert "threshold" in result.output
+
+    # determystic: tested-exceptions[determystic.validators.dynamic_ast.DynamicASTValidator._load_validator_module: Exception]
     def test_load_validator_module_invalid_syntax(self, temp_project_dir: Path) -> None:
         """Test loading a validator module with invalid Python syntax."""
         # Create validator file with invalid syntax
@@ -335,6 +436,32 @@ class NotATraverser:
         assert result.success
         assert "No issues found" in result.output
 
+    # determystic: tested-exceptions[determystic.validators.dynamic_ast.DynamicASTValidator.validate: Exception]
+    @pytest.mark.asyncio
+    async def test_validate_reports_traverser_runtime_errors(
+        self,
+        temp_project_dir: Path,
+    ) -> None:
+        """Per-file traverser errors are reported without aborting validation."""
+        python_file = temp_project_dir / "code.py"
+        python_file.write_text("value = 1")
+
+        class ExplodingTraverser(DeterministicTraverser):
+            def __init__(self, code: str) -> None:
+                raise RuntimeError("boom")
+
+        validator = DynamicASTValidator(
+            name="test_validator",
+            validator_path=Path("dummy"),
+            path=temp_project_dir,
+        )
+        validator.traverser_class = ExplodingTraverser
+
+        result = await validator.validate()
+
+        assert not result.success
+        assert "code.py: Error: boom" in result.output
+
     @pytest.mark.asyncio
     async def test_validate_respects_suppression_comments(
         self,
@@ -430,6 +557,31 @@ def test_function():
         assert not result.success
         assert "regular_code.py" in result.output
         assert "hidden_code.py" not in result.output
+
+    @pytest.mark.asyncio
+    async def test_validate_respects_configured_ignore_paths(
+        self,
+        temp_project_dir: Path,
+        sample_python_code_with_issues: str,
+    ) -> None:
+        """Configured ignore paths exclude Python files from custom validators."""
+        generated_dir = temp_project_dir / "generated"
+        generated_dir.mkdir()
+        ignored_file = generated_dir / "client.py"
+        ignored_file.write_text(sample_python_code_with_issues)
+
+        validator = DynamicASTValidator(
+            name="test_validator",
+            validator_path=Path("dummy"),
+            path=temp_project_dir,
+            ignore_paths=["generated/"],
+        )
+        validator.traverser_class = MockTraverserSingleArg
+
+        result = await validator.validate()
+
+        assert result.success
+        assert "No Python files found" in result.output
 
     def test_display_name_property(self, temp_project_dir: Path) -> None:
         """Test that display_name property formats the name correctly."""

@@ -2,10 +2,12 @@
 
 import inspect
 from pathlib import Path
-from typing import Type
+from typing import Any, Type
 
+from pydantic import BaseModel
 from determystic.configs.project import ProjectConfigManager
 from determystic.external import DeterministicTraverser
+from determystic.path_filters import iter_python_files
 from determystic.suppressions import SuppressionComments
 from determystic.validators.base import BaseValidator, ValidationResult
 from determystic.logging import CONSOLE
@@ -14,10 +16,23 @@ from determystic.logging import CONSOLE
 class DynamicASTValidator(BaseValidator):
     """Loads and runs custom AST validators from .determystic files."""
     
-    def __init__(self, *, name: str, validator_path: Path, path: Path | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        name: str,
+        validator_path: Path,
+        path: Path | None = None,
+        ignore_paths: list[str] | None = None,
+        config_data: dict[str, Any] | None = None,
+    ) -> None:
         super().__init__(name=name, path=path)
         self.validator_path = validator_path
+        self.ignore_paths = ignore_paths or []
+        self.config_data = config_data or {}
         self.traverser_class = self._load_validator_module(validator_path)
+        self.traverser_config: BaseModel | None = None
+        self.config_error: str | None = None
+        self._load_traverser_config()
     
     @classmethod
     def create_validators(cls, config_manager: ProjectConfigManager) -> list["BaseValidator"]:
@@ -35,7 +50,9 @@ class DynamicASTValidator(BaseValidator):
             validator = cls(
                 name=validator_file.name,
                 validator_path=validator_path,
-                path=config_manager.project_root
+                path=config_manager.project_root,
+                ignore_paths=config_manager.ignore_paths,
+                config_data=config_manager._get_validator_config_data(validator_file.name),
             )
             
             # Only add if the traverser class was successfully loaded
@@ -52,10 +69,14 @@ class DynamicASTValidator(BaseValidator):
                 success=False, 
                 output=f"Failed to load validator from {self.validator_path}"
             )
+        if self.config_error is not None:
+            return ValidationResult(
+                success=False,
+                output=f"Invalid config for validator '{self.name}': {self.config_error}",
+            )
         
         # Find all Python files
-        python_files = list(self.path.rglob("*.py"))
-        python_files = [f for f in python_files if not any(part.startswith('.') for part in f.parts)]
+        python_files = iter_python_files(self.path, self.ignore_paths)
         
         if not python_files:
             return ValidationResult(success=True, output="No Python files found")
@@ -68,15 +89,7 @@ class DynamicASTValidator(BaseValidator):
                 relative_path = py_file.relative_to(self.path)
                 suppressions = SuppressionComments.from_source(file_content)
                 
-                # Run traverser - check signature to handle different constructor patterns
-                sig = inspect.signature(self.traverser_class.__init__)
-                params = list(sig.parameters.keys())
-                
-                # If it only accepts 'self' and 'code', don't pass filename
-                if len(params) == 2 and 'filename' not in params:
-                    traverser = self.traverser_class(file_content)
-                else:
-                    traverser = self.traverser_class(file_content, str(relative_path))
+                traverser = self._create_traverser(file_content, str(relative_path))
                 
                 result = traverser.validate()
                 
@@ -99,6 +112,46 @@ class DynamicASTValidator(BaseValidator):
         output = "\n\n".join(all_issues) if all_issues else "No issues found"
         
         return ValidationResult(success=success, output=output)
+
+    def _create_traverser(
+        self,
+        file_content: str,
+        relative_path: str,
+    ) -> DeterministicTraverser:
+        assert self.traverser_class is not None
+        sig = inspect.signature(self.traverser_class.__init__)
+        params = sig.parameters
+
+        accepts_filename = "filename" in params
+        accepts_config = "config" in params
+
+        if accepts_filename and accepts_config:
+            return self.traverser_class(
+                file_content,
+                relative_path,
+                config=self.traverser_config,
+            )
+        if accepts_filename:
+            return self.traverser_class(file_content, relative_path)
+        if accepts_config:
+            return self.traverser_class(file_content, config=self.traverser_config)
+        return self.traverser_class(file_content)
+
+    def _load_traverser_config(self) -> None:
+        if self.traverser_class is None:
+            return
+
+        config_model = getattr(self.traverser_class, "config_model", None)
+        if config_model is None:
+            return
+        if not inspect.isclass(config_model) or not issubclass(config_model, BaseModel):
+            self.config_error = "config_model must be a pydantic BaseModel subclass"
+            return
+
+        try:
+            self.traverser_config = config_model.model_validate(self.config_data)
+        except Exception as error:
+            self.config_error = str(error)
     
     def _load_validator_module(self, validator_path: Path) -> Type[DeterministicTraverser] | None:
         """Helper function to load a validator module using importlib and find DeterministicTraverser subclass."""

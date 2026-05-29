@@ -1,7 +1,9 @@
 """Tests for function visibility validator functionality."""
 
 import tempfile
+import tomllib
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -212,6 +214,77 @@ def public_api():
 
         assert result.success
         assert result.output == "No Python files found"
+
+    @pytest.mark.asyncio
+    async def test_validate_respects_configured_ignore_paths(
+        self,
+        temp_project_dir: Path,
+    ) -> None:
+        """Configured ignore paths exclude Python files from visibility analysis."""
+        generated_dir = temp_project_dir / "generated"
+        generated_dir.mkdir()
+        (generated_dir / "service.py").write_text("""
+def helper():
+    return "ok"
+
+
+def public_api():
+    return helper()
+""")
+
+        validator = FunctionVisibilityValidator(
+            path=temp_project_dir,
+            ignore_paths=["generated/"],
+        )
+        result = await validator.validate()
+
+        assert result.success
+        assert result.output == "No Python files found"
+
+    # determystic: tested-exceptions[determystic.validators.function_visibility.FunctionVisibilityValidator._build_project_index: SyntaxError, UnicodeDecodeError]
+    def test_build_project_index_skips_unparseable_files(
+        self,
+        temp_project_dir: Path,
+    ) -> None:
+        """Project indexing skips files that cannot be parsed as Python."""
+        bad_syntax_file = temp_project_dir / "bad_syntax.py"
+        bad_syntax_file.write_text("def broken(:\n")
+        bad_unicode_file = temp_project_dir / "bad_unicode.py"
+        bad_unicode_file.write_bytes(b"\xff")
+        good_file = temp_project_dir / "service.py"
+        good_file.write_text("""
+def public_api():
+    return "ok"
+""")
+
+        validator = FunctionVisibilityValidator(path=temp_project_dir)
+        index = validator._build_project_index(
+            [bad_syntax_file, bad_unicode_file, good_file]
+        )
+
+        assert list(index.modules_by_path) == ["service.py"]
+
+    # determystic: tested-exceptions[determystic.validators.function_visibility.FunctionVisibilityValidator._get_script_entrypoints: TOMLDecodeError, KeyError, ValueError]
+    def test_get_script_entrypoints_handles_pyproject_parse_errors(
+        self,
+        temp_project_dir: Path,
+    ) -> None:
+        """Malformed entrypoint configuration is treated as no entrypoints."""
+        pyproject_file = temp_project_dir / "pyproject.toml"
+        pyproject_file.write_text("[project]\n")
+        validator = FunctionVisibilityValidator(path=temp_project_dir)
+
+        parse_errors = [
+            tomllib.TOMLDecodeError("bad toml", "bad", 0),
+            KeyError("scripts"),
+            ValueError("bad script"),
+        ]
+        for parse_error in parse_errors:
+            with patch(
+                "determystic.validators.function_visibility.tomllib.load",
+                side_effect=parse_error,
+            ):
+                assert validator._get_script_entrypoints(temp_project_dir) == set()
 
     @pytest.mark.asyncio
     async def test_validate_respects_function_visibility_suppression_block(

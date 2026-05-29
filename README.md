@@ -99,11 +99,12 @@ Determystic includes bundled validators that can replace parts of a conventional
 | `static_analysis` | **Static Analysis** | Code formatting, style conventions, and type checking | `ruff` + `ty` |
 | `hanging_functions` | **Hanging Functions** | Detects unused functions, methods, classes, arguments, and unreachable code | AST analysis |
 | `function_visibility` | **Function Visibility** | Requires externally used functions/methods before private helpers, and internal helpers to use `_` prefixes | Project import graph + AST analysis |
+| `exception_coverage` | **Exception Coverage** | Requires every production `except` handler to be marked as covered by a test function | Test comment markers + AST analysis |
 | `dynamic_ast` | **Dynamic AST** | Loads and runs custom validators from `.determystic` files | Custom AST traversers |
 
 ## Configuration
 
-You can customize which validators run in your project by adding a `[tool.determystic]` section to your project `pyproject.toml`. The configuration supports enabling bundled validators and excluding specific validators from running.
+You can customize which validators run in your project by adding a `[tool.determystic]` section to your project `pyproject.toml`. The configuration supports enabling bundled validators, excluding specific validators from running, and ignoring generated or vendored paths.
 Generated custom validator metadata is also tracked in this section; the generated validator source files still live under `.determystic/`.
 
 ### Enabling Bundled Validators
@@ -120,6 +121,57 @@ enabled = [
 ```
 
 Use `enabled = ["all"]` to opt into every bundled validator explicitly.
+
+### Ignoring Files And Directories
+
+To skip generated, vendored, or otherwise out-of-scope code across all validators, add project-relative entries to `ignore_paths`:
+
+```toml
+# pyproject.toml
+[tool.determystic]
+ignore_paths = [
+    "generated/",
+    "vendor/client.py",
+    "build/**/*.py"
+]
+```
+
+Directory entries ignore everything below that directory. Glob-style entries are also supported.
+
+### Per-Validator Configuration
+
+Validators can declare an optional Pydantic `BaseModel` config schema. Project config for that validator lives under its isolated validator section:
+
+```toml
+# pyproject.toml
+[tool.determystic.validators.my_custom_validator]
+name = "my_custom_validator"
+validator_path = ".determystic/validations/my_custom_validator.determystic"
+
+[tool.determystic.validators.my_custom_validator.config]
+forbidden_name = "debug_only"
+```
+
+Custom validator traversers expose that schema with `config_model` and accept `config` in `__init__`:
+
+```python
+from pydantic import BaseModel
+from determystic.external import DeterministicTraverser
+
+
+class MyValidatorConfig(BaseModel):
+    forbidden_name: str = "debug"
+
+
+class MyValidator(DeterministicTraverser):
+    config_model = MyValidatorConfig
+
+    def __init__(self, code, filename="<string>", config=None):
+        super().__init__(code, filename, config=config)
+        self.typed_config = config or MyValidatorConfig()
+```
+
+The same `[tool.determystic.validators.<name>.config]` convention is available to bundled validators that declare a config model.
 
 ### Excluding Validators
 
@@ -154,6 +206,18 @@ def framework_registered_helper():
 Line comments apply to that line and the next line. Comments on or immediately above a function/class definition apply to that whole definition. `ignore-start[...]` and `ignore-end[...]` suppress a block.
 
 Supported codes include `unused-function`, `unused-method`, `unused-class`, `unused-argument`, `unreachable-code`, `dead-code`, `private-prefix`, `function-order`, and `function-visibility`. Custom validators can also be suppressed by validator name.
+
+### Exception Coverage Markers
+
+The `exception_coverage` bundled validator does not require comments in production code. Instead, add a marker immediately above the test function, or above that test function's decorators, naming the production function and the handled exception types that test covers:
+
+```python
+# determystic: tested-exceptions[my_package.service.load_config: FileNotFoundError, ValueError]
+def test_load_config_handles_missing_or_invalid_file():
+    ...
+```
+
+Use the fully qualified production target, including class names for methods, such as `my_package.worker.Runner.execute`. Exception names may be written as `ValueError` or `module.ValueError`.
 
 ### Agent Selection
 
