@@ -518,5 +518,5 @@ async def create_ast_validator(
         requirements=requirements or "Detect issues in the provided code"
     )
     
-    result = await agent.run(prompt, model=anthropic_client, deps=deps)  # type: ignore
+    result = await agent.run(prompt, model=anthropic_client, deps=deps)
     return result.output, deps.validation_contents, deps.test_contents

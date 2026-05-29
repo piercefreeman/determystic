@@ -28,7 +28,7 @@ class BaseValidator(ABC):
 
         """
         self.name = name
-        self.path = path
+        self.path = path or Path.cwd()
     
     @classmethod
     @abstractmethod

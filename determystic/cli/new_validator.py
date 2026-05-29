@@ -4,8 +4,6 @@ import sys
 from pathlib import Path
 import re
 from random import randint
-from pydantic_ai.models.anthropic import AnthropicModel
-from pydantic_ai.providers.anthropic import AnthropicProvider
 
 import click
 from rich.console import Console
@@ -19,8 +17,12 @@ from pygments.lexers import PythonLexer # type: ignore
 from prompt_toolkit.patch_stdout import patch_stdout
 
 from determystic.configs.project import ProjectConfigManager
-from determystic.configs.system import DeterministicSettings
-from determystic.agents.create_validator import stream_create_validator, StreamEvent
+from determystic.agents.create_validator import StreamEvent
+from determystic.agents.local_agent import (
+    LocalAgentSelectionError,
+    select_local_agent,
+    stream_create_validator_with_local_agent,
+)
 from determystic.io import async_to_sync
 
 console = Console()
@@ -117,17 +119,16 @@ def format_validator_name(raw_validator_name: str) -> str:
 @async_to_sync
 async def new_validator_command(path: Path | None):
     """Run the interactive validator creation workflow."""
-
-    # Try to load the system config before we kick off
-    settings = DeterministicSettings.load_from_disk()
-    if not settings.anthropic_api_key:
-        console.print("[red]Anthropic API key not found. Please run `uvx determystic configure` to set it.[/red]")
-        sys.exit(1)
     
     if path:
         ProjectConfigManager.set_runtime_custom_path(path)
 
     config_manager = ProjectConfigManager.load_from_disk()
+    try:
+        selected_agent = select_local_agent(config_manager.settings.validator_agent)
+    except LocalAgentSelectionError as e:
+        console.print(f"[red]{e}[/red]")
+        sys.exit(1)
 
     # Get code snippet from user
     console.print("\n[bold]Step 1: Provide the code snippet[/bold]")
@@ -159,7 +160,7 @@ async def new_validator_command(path: Path | None):
         console.print(f"[dim]Formatted validator name: {validator_name}[/dim]")
     
     # Check if validator already exists
-    existing_validators = list(config_manager.validators.values())  # type: ignore
+    existing_validators = list(config_manager.validators.values())
     if any(v.name == validator_name for v in existing_validators):
         if not Prompt.ask(f"\n[yellow]Validator '{validator_name}' already exists. Overwrite?[/yellow]", choices=["y", "n"], default="n") == "y":
             console.print("[red]Operation cancelled.[/red]")
@@ -176,19 +177,14 @@ async def new_validator_command(path: Path | None):
         sys.exit(0)
     
     # Run the agent
-    console.print("\n[bold cyan]🤖 Starting AST Validator Agent...[/bold cyan]")
+    console.print(f"\n[bold cyan]🤖 Starting AST Validator Agent ({selected_agent})...[/bold cyan]")
     console.print("[dim]This may take a few moments as the agent creates and tests the validator.[/dim]\n")
     
-    # Import Anthropic model
-    anthropic_provider = AnthropicProvider(api_key=settings.anthropic_api_key)
-    anthropic_client = AnthropicModel("claude-sonnet-4-20250514", provider=anthropic_provider)
-    
-    # Save current working directory
     final_event: StreamEvent | None = None
-    async for event in stream_create_validator(
+    async for event in stream_create_validator_with_local_agent(
         user_code=code_snippet,
         requirements=issue_description,
-        anthropic_client=anthropic_client,
+        agent_name=selected_agent,
     ):
         if event.event_type == 'user_prompt':
             console.print(f"[bold blue]📝 {event.content}[/bold blue]")
@@ -212,10 +208,10 @@ async def new_validator_command(path: Path | None):
         sys.exit(1)
     
     console.print("\n[bold green]✅ Agent completed successfully![/bold green]")
-    console.print(Panel(final_event.content, title="Final Result", border_style="green"))  # type: ignore
+    console.print(Panel(final_event.content, title="Final Result", border_style="green"))
     
-    validation_contents = final_event.deps.validation_contents  # type: ignore
-    test_contents = final_event.deps.test_contents  # type: ignore
+    validation_contents = final_event.deps.validation_contents
+    test_contents = final_event.deps.test_contents
     
     # Process generated files from agent virtual contents
     if validation_contents or test_contents:
@@ -229,7 +225,7 @@ async def new_validator_command(path: Path | None):
         # Save validator files and track them in pyproject.toml
         if validation_contents:
             try:
-                validator_file = config_manager.new_validation(  # type: ignore
+                validator_file = config_manager.new_validation(
                     name=validator_name,
                     validator_script=validation_contents,
                     test_script=test_contents or "",
@@ -237,7 +233,7 @@ async def new_validator_command(path: Path | None):
                 )
                 
                 # Save the config to disk
-                config_manager.save_to_disk()  # type: ignore
+                config_manager.save_to_disk()
                 
                 console.print("\n[bold green]✅ Validator saved successfully![/bold green]")
                 console.print(f"  • Validator: {validator_file.validator_path}")

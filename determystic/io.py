@@ -68,12 +68,12 @@ def detect_git_root(start_path: Path) -> Optional[Path]:
         # Not in a git repository or git not available
         return None
 
-def get_determystic_package_path() -> Optional[Path]:
+def get_determystic_package_path() -> Path:
     """
     Get the path to the determystic package.
     
     Returns:
-        Path to the determystic package directory, or None if not found
+        Path to the determystic package directory.
     """
     try:
         import determystic
