@@ -147,6 +147,99 @@ value = public_api()
         assert result.success
 
     @pytest.mark.asyncio
+    async def test_validate_resolves_package_root_imports_under_service_directory(
+        self,
+        temp_project_dir: Path,
+    ) -> None:
+        """Monorepo service packages are often imported from their package root."""
+        service_package = (
+            temp_project_dir / "services" / "browser-control" / "browser_control_service"
+        )
+        service_package.mkdir(parents=True)
+        (service_package / "__init__.py").write_text("")
+        (service_package / "redaction.py").write_text("""
+def redact_text(value):
+    return value
+""")
+        (service_package / "runtime.py").write_text("""
+from browser_control_service.redaction import redact_text as _redact_text
+
+value = _redact_text("secret")
+""")
+
+        validator = FunctionVisibilityValidator(path=temp_project_dir)
+        result = await validator.validate()
+
+        assert result.success, result.output
+
+    @pytest.mark.asyncio
+    async def test_validate_uses_ignored_files_and_plugin_attributes_as_references(
+        self,
+        temp_project_dir: Path,
+    ) -> None:
+        """Ignored runtime files can still reference plugin methods via registries."""
+        package_dir = temp_project_dir / "app"
+        package_dir.mkdir()
+        (package_dir / "__init__.py").write_text("")
+        (package_dir / "plugins.py").write_text("""
+from dataclasses import dataclass, field
+
+from app.tracing import TracePlugin
+
+@dataclass
+class RuntimePlugins:
+    tracing: TracePlugin = field(default_factory=TracePlugin)
+""")
+        (package_dir / "tracing.py").write_text("""
+class TracePlugin:
+    def create_context_trace(self):
+        return "trace"
+""")
+        (package_dir / "runtime.py").write_text("""
+from app.plugins import RuntimePlugins
+
+class Runtime:
+    def __init__(self):
+        self.plugins = RuntimePlugins()
+
+    def create(self):
+        return self.plugins.tracing.create_context_trace()
+""")
+
+        validator = FunctionVisibilityValidator(
+            path=temp_project_dir,
+            ignore_paths=["app/runtime.py"],
+        )
+        result = await validator.validate()
+
+        assert result.success, result.output
+
+    @pytest.mark.asyncio
+    async def test_validate_treats_unresolved_attribute_calls_as_external_methods(
+        self,
+        temp_project_dir: Path,
+    ) -> None:
+        """Composition through untyped writer attributes should not force private names."""
+        (temp_project_dir / "writer.py").write_text("""
+class TraceWriter:
+    def record(self, event):
+        return event
+""")
+        (temp_project_dir / "actions.py").write_text("""
+class ActionRecorder:
+    def __init__(self, writer):
+        self._writer = writer
+
+    def action_started(self):
+        return self._writer.record("started")
+""")
+
+        validator = FunctionVisibilityValidator(path=temp_project_dir)
+        result = await validator.validate()
+
+        assert result.success, result.output
+
+    @pytest.mark.asyncio
     async def test_validate_flags_internal_class_method_without_underscore_and_before_public(
         self,
         temp_project_dir: Path,

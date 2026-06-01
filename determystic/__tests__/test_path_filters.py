@@ -45,3 +45,22 @@ def test_iter_python_files_respects_ignore_paths_and_test_filter(tmp_path) -> No
     }
 
     assert files == {"service.py"}
+
+
+def test_iter_python_files_can_include_ignored_reference_sources(tmp_path) -> None:
+    """Validators can include ignored files when they only need references."""
+    (tmp_path / "service.py").write_text("value = 1")
+    generated_dir = tmp_path / "generated"
+    generated_dir.mkdir()
+    (generated_dir / "client.py").write_text("value = 1")
+
+    files = {
+        file.relative_to(tmp_path).as_posix()
+        for file in iter_python_files(
+            tmp_path,
+            ["generated/"],
+            include_ignored=True,
+        )
+    }
+
+    assert files == {"generated/client.py", "service.py"}

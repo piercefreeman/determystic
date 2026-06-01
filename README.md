@@ -236,3 +236,5 @@ validator_agent = "claude"
 - We use .deterministic file extensions for our validation and validation test files. These are just python files but we prefer a different extension so they're not inadvertantly picked up by static analysis tools that just sniff for any .py extension. We might reconsider this in the future.
 - Since determystic files are on disk, they should be portable across projects and usable by CI validation across a team
 - Right now we don't support the editing case for existing validators - but this seems like an obvious extension in the future to try and make these more flexible given additional code that either incorrectly validates or does not validate
+- The bundled verifiers are themselves all AI-coded. We provide them for convenience instead of a guarantee of accuracy.
+

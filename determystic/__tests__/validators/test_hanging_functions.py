@@ -90,7 +90,7 @@ result = calc.add(1, 2)
     @pytest.fixture
     def sample_pyproject_toml(self) -> str:
         """Sample pyproject.toml with script entrypoints."""
-        return '''
+        return """
 [project]
 name = "test-project"
 version = "0.1.0"
@@ -98,7 +98,7 @@ version = "0.1.0"
 [project.scripts]
 my-script = "main:cli"
 another-script = "module.submodule:entry_point"
-'''
+"""
 
     @pytest.fixture
     def sample_code_with_decorated_functions(self) -> str:
@@ -151,39 +151,37 @@ result = used_function()
         """Test create_validators factory method."""
         # Create basic pyproject config structure
         config_path = temp_project_dir / "pyproject.toml"
-        config_path.write_text('''
+        config_path.write_text("""
 [tool.determystic]
 version = "1.0"
 [tool.determystic.validators]
 [tool.determystic.settings]
-''')
+""")
 
         # Reset and set runtime path and load config manager
         ProjectConfigManager.runtime_custom_path = None
         ProjectConfigManager._found_path = None
         ProjectConfigManager.set_runtime_custom_path(temp_project_dir)
         mock_config_manager = ProjectConfigManager.load_from_disk()
-        
+
         validators = HangingFunctionsValidator.create_validators(mock_config_manager)
-        
+
         assert len(validators) == 1
         assert isinstance(validators[0], HangingFunctionsValidator)
         assert validators[0].name == "hanging_functions"
 
     @pytest.mark.asyncio
     async def test_validate_with_hanging_function(
-        self, 
-        temp_project_dir: Path,
-        sample_code_with_hanging_function: str
+        self, temp_project_dir: Path, sample_code_with_hanging_function: str
     ) -> None:
         """Test validation that finds hanging functions."""
         # Create Python file with hanging function
         python_file = temp_project_dir / "main.py"
         python_file.write_text(sample_code_with_hanging_function)
-        
+
         validator = HangingFunctionsValidator(path=temp_project_dir)
         result = await validator.validate()
-        
+
         # Should find the hanging function
         assert not result.success
         assert "hanging_function" in result.output
@@ -192,36 +190,32 @@ version = "1.0"
 
     @pytest.mark.asyncio
     async def test_validate_no_hanging_functions(
-        self, 
-        temp_project_dir: Path,
-        sample_code_no_hanging_functions: str
+        self, temp_project_dir: Path, sample_code_no_hanging_functions: str
     ) -> None:
         """Test validation with no hanging functions."""
         # Create Python file without hanging functions
         python_file = temp_project_dir / "main.py"
         python_file.write_text(sample_code_no_hanging_functions)
-        
+
         validator = HangingFunctionsValidator(path=temp_project_dir)
         result = await validator.validate()
-        
+
         # Should pass validation
         assert result.success
         assert "No dead code found" in result.output
 
     @pytest.mark.asyncio
     async def test_validate_with_class_methods(
-        self, 
-        temp_project_dir: Path,
-        sample_code_with_class_methods: str
+        self, temp_project_dir: Path, sample_code_with_class_methods: str
     ) -> None:
         """Test validation with class methods."""
         # Create Python file with class methods
         python_file = temp_project_dir / "calculator.py"
         python_file.write_text(sample_code_with_class_methods)
-        
+
         validator = HangingFunctionsValidator(path=temp_project_dir)
         result = await validator.validate()
-        
+
         # Should find unused_method and _private_method but not __str__
         assert not result.success
         assert "unused_method" in result.output
@@ -231,35 +225,33 @@ version = "1.0"
 
     @pytest.mark.asyncio
     async def test_validate_ignores_test_files(
-        self, 
-        temp_project_dir: Path,
-        sample_code_with_hanging_function: str
+        self, temp_project_dir: Path, sample_code_with_hanging_function: str
     ) -> None:
         """Test that validation ignores test files."""
         # Create test files with hanging functions
         test_file1 = temp_project_dir / "test_something.py"
         test_file1.write_text(sample_code_with_hanging_function)
-        
+
         test_file2 = temp_project_dir / "something_test.py"
         test_file2.write_text(sample_code_with_hanging_function)
-        
+
         test_dir = temp_project_dir / "__tests__"
         test_dir.mkdir()
         test_file3 = test_dir / "test_file.py"
         test_file3.write_text(sample_code_with_hanging_function)
-        
+
         tests_dir = temp_project_dir / "tests"
         tests_dir.mkdir()
         test_file4 = tests_dir / "test_file.py"
         test_file4.write_text(sample_code_with_hanging_function)
-        
+
         # Create a regular file with hanging function
         regular_file = temp_project_dir / "main.py"
         regular_file.write_text(sample_code_with_hanging_function)
-        
+
         validator = HangingFunctionsValidator(path=temp_project_dir)
         result = await validator.validate()
-        
+
         # Should only find hanging functions in the regular file
         assert not result.success
         assert "main.py" in result.output
@@ -270,9 +262,7 @@ version = "1.0"
 
     @pytest.mark.asyncio
     async def test_validate_ignores_hidden_directories(
-        self, 
-        temp_project_dir: Path,
-        sample_code_with_hanging_function: str
+        self, temp_project_dir: Path, sample_code_with_hanging_function: str
     ) -> None:
         """Test that validation ignores hidden directories."""
         # Create file in hidden directory
@@ -280,20 +270,20 @@ version = "1.0"
         hidden_dir.mkdir()
         hidden_file = hidden_dir / "main.py"
         hidden_file.write_text(sample_code_with_hanging_function)
-        
+
         # Create file in __pycache__ directory
         pycache_dir = temp_project_dir / "__pycache__"
         pycache_dir.mkdir()
         pycache_file = pycache_dir / "main.py"
         pycache_file.write_text(sample_code_with_hanging_function)
-        
+
         # Create regular file
         regular_file = temp_project_dir / "main.py"
         regular_file.write_text(sample_code_with_hanging_function)
-        
+
         validator = HangingFunctionsValidator(path=temp_project_dir)
         result = await validator.validate()
-        
+
         # Should only process the regular file
         assert not result.success
         assert "main.py" in result.output
@@ -323,15 +313,13 @@ version = "1.0"
 
     @pytest.mark.asyncio
     async def test_validate_with_script_entrypoints(
-        self, 
-        temp_project_dir: Path,
-        sample_pyproject_toml: str
+        self, temp_project_dir: Path, sample_pyproject_toml: str
     ) -> None:
         """Test that script entrypoints are ignored."""
         # Create pyproject.toml with script entrypoints
         pyproject_file = temp_project_dir / "pyproject.toml"
         pyproject_file.write_text(sample_pyproject_toml)
-        
+
         # Create Python file with functions matching script entrypoints
         python_code = '''
 def cli():
@@ -348,10 +336,10 @@ def hanging_function():
 '''
         python_file = temp_project_dir / "main.py"
         python_file.write_text(python_code)
-        
+
         validator = HangingFunctionsValidator(path=temp_project_dir)
         result = await validator.validate()
-        
+
         # Should only find hanging_function, not the script entrypoints
         assert not result.success
         assert "hanging_function" in result.output
@@ -385,17 +373,14 @@ def hanging_function():
         """Test validation when there are no Python files."""
         validator = HangingFunctionsValidator(path=temp_project_dir)
         result = await validator.validate()
-        
+
         # Should pass with no files message
         assert result.success
         assert "No Python files found" in result.output
 
     # determystic: tested-exceptions[determystic.validators.hanging_functions.HangingFunctionsValidator.validate: SyntaxError, UnicodeDecodeError]
     @pytest.mark.asyncio
-    async def test_validate_syntax_error_in_file(
-        self, 
-        temp_project_dir: Path
-    ) -> None:
+    async def test_validate_syntax_error_in_file(self, temp_project_dir: Path) -> None:
         """Test that files with syntax errors are skipped gracefully."""
         # Create file with syntax error
         bad_file = temp_project_dir / "bad_syntax.py"
@@ -403,17 +388,17 @@ def hanging_function():
 
         bad_unicode_file = temp_project_dir / "bad_unicode.py"
         bad_unicode_file.write_bytes(b"\xff")
-        
+
         # Create valid file with hanging function
         good_file = temp_project_dir / "good_file.py"
-        good_file.write_text('''
+        good_file.write_text("""
 def hanging_function():
     return "hanging"
-''')
-        
+""")
+
         validator = HangingFunctionsValidator(path=temp_project_dir)
         result = await validator.validate()
-        
+
         # Should find hanging function in good file, skip bad file
         assert not result.success
         assert "hanging_function" in result.output
@@ -421,8 +406,7 @@ def hanging_function():
 
     @pytest.mark.asyncio
     async def test_validate_function_references_without_calls(
-        self, 
-        temp_project_dir: Path
+        self, temp_project_dir: Path
     ) -> None:
         """Test that function references (not just calls) are detected."""
         python_code = '''
@@ -443,10 +427,10 @@ result = calling_function()
 '''
         python_file = temp_project_dir / "main.py"
         python_file.write_text(python_code)
-        
+
         validator = HangingFunctionsValidator(path=temp_project_dir)
         result = await validator.validate()
-        
+
         # Should only find hanging_function
         assert not result.success
         assert "hanging_function" in result.output
@@ -454,10 +438,7 @@ result = calling_function()
         assert "calling_function" not in result.output
 
     @pytest.mark.asyncio
-    async def test_validate_method_calls(
-        self, 
-        temp_project_dir: Path
-    ) -> None:
+    async def test_validate_method_calls(self, temp_project_dir: Path) -> None:
         """Test that method calls are properly detected."""
         python_code = '''
 class MyClass:
@@ -474,10 +455,10 @@ result = obj.called_method()
 '''
         python_file = temp_project_dir / "main.py"
         python_file.write_text(python_code)
-        
+
         validator = HangingFunctionsValidator(path=temp_project_dir)
         result = await validator.validate()
-        
+
         # Should only find hanging_method
         assert not result.success
         assert "hanging_method" in result.output
@@ -486,18 +467,16 @@ result = obj.called_method()
 
     @pytest.mark.asyncio
     async def test_validate_ignores_decorated_functions(
-        self, 
-        temp_project_dir: Path,
-        sample_code_with_decorated_functions: str
+        self, temp_project_dir: Path, sample_code_with_decorated_functions: str
     ) -> None:
         """Test that decorated functions are ignored even if they're not referenced."""
         # Create Python file with decorated functions
         python_file = temp_project_dir / "main.py"
         python_file.write_text(sample_code_with_decorated_functions)
-        
+
         validator = HangingFunctionsValidator(path=temp_project_dir)
         result = await validator.validate()
-        
+
         # Should only find hanging_function (the one without decorators)
         # All decorated functions should be ignored
         assert not result.success
@@ -517,7 +496,7 @@ result = obj.called_method()
         temp_project_dir: Path,
     ) -> None:
         """Test that NodeVisitor-style visit hooks are not treated as hanging methods."""
-        python_code = '''
+        python_code = """
 import ast
 
 
@@ -526,7 +505,7 @@ class MyVisitor(ast.NodeVisitor):
         self.generic_visit(node)
 
 visitor = MyVisitor()
-'''
+"""
         python_file = temp_project_dir / "visitor.py"
         python_file.write_text(python_code)
 
@@ -542,7 +521,7 @@ visitor = MyVisitor()
         temp_project_dir: Path,
     ) -> None:
         """Test the broader dead-code checks beyond unused functions."""
-        python_code = '''
+        python_code = """
 class UsedClass:
     def method(self, value, unused_value):
         return value
@@ -557,7 +536,7 @@ def function_with_unused_arg(used_value, unused_value):
 
 instance = UsedClass()
 result = instance.method("used", "unused")
-'''
+"""
         python_file = temp_project_dir / "main.py"
         python_file.write_text(python_code)
 
@@ -566,8 +545,14 @@ result = instance.method("used", "unused")
 
         assert not result.success
         assert "Class 'UnusedClass' is defined but never referenced" in result.output
-        assert "Argument 'unused_value' in 'UsedClass.method' is never used" in result.output
-        assert "Argument 'unused_value' in 'function_with_unused_arg' is never used" in result.output
+        assert (
+            "Argument 'unused_value' in 'UsedClass.method' is never used"
+            in result.output
+        )
+        assert (
+            "Argument 'unused_value' in 'function_with_unused_arg' is never used"
+            in result.output
+        )
         assert "Unreachable code after terminal statement" in result.output
 
     @pytest.mark.asyncio
@@ -578,27 +563,27 @@ result = instance.method("used", "unused")
         """Imported classes used only for inheritance should not look unused."""
         base_file = temp_project_dir / "base.py"
         base_file.write_text(
-            '''
+            """
 class BasePlugin:
     pass
-'''
+"""
         )
 
         plugin_file = temp_project_dir / "plugin.py"
         plugin_file.write_text(
-            '''
+            """
 from base import BasePlugin as PluginBase
 
 class ConcretePlugin(PluginBase):
     pass
-'''
+"""
         )
 
         registry_file = temp_project_dir / "registry.py"
         registry_file.write_text(
-            '''
+            """
 from plugin import ConcretePlugin
-'''
+"""
         )
 
         validator = HangingFunctionsValidator(path=temp_project_dir)
@@ -613,7 +598,7 @@ from plugin import ConcretePlugin
         temp_project_dir: Path,
     ) -> None:
         """No-op hooks can explicitly consume intentionally unused arguments."""
-        python_code = '''
+        python_code = """
 class RuntimePluginBase:
     def close(self, *, delete: bool = False) -> None:
         del delete
@@ -621,7 +606,7 @@ class RuntimePluginBase:
 
 plugin = RuntimePluginBase()
 plugin.close(delete=True)
-'''
+"""
         python_file = temp_project_dir / "plugin_base.py"
         python_file.write_text(python_code)
 
@@ -664,7 +649,7 @@ entrypoint = use_dialog
         temp_project_dir: Path,
     ) -> None:
         """Test inline comments for externally used symbols and specific ignores."""
-        python_code = '''
+        python_code = """
 class ExternalPlugin:  # determystic: used
     def callback(self, event, context):  # determystic: used
         return event
@@ -679,7 +664,7 @@ def function_with_intentional_dead_code(arg):  # determystic: ignore[unused-argu
 
 def hanging_function():
     return "still flagged"
-'''
+"""
         python_file = temp_project_dir / "main.py"
         python_file.write_text(python_code)
 
@@ -701,7 +686,7 @@ def hanging_function():
         temp_project_dir: Path,
     ) -> None:
         """Test definition-level and block-level dead-code suppressions."""
-        python_code = '''
+        python_code = """
 # determystic: ignore[dead-code]
 def generated_callback(event, context):
     return event
@@ -717,7 +702,7 @@ def external_function(unused_value):
 
 def hanging_function():
     return "still flagged"
-'''
+"""
         python_file = temp_project_dir / "main.py"
         python_file.write_text(python_code)
 
@@ -738,7 +723,7 @@ def hanging_function():
         temp_project_dir: Path,
     ) -> None:
         """Test that __all__ exports count as intentional public API."""
-        python_code = '''
+        python_code = """
 __all__ = ["ExportedClass", "exported_function"]
 
 class ExportedClass:
@@ -746,7 +731,7 @@ class ExportedClass:
 
 def exported_function():
     return "exported"
-'''
+"""
         python_file = temp_project_dir / "main.py"
         python_file.write_text(python_code)
 
@@ -756,9 +741,37 @@ def exported_function():
         assert result.success
         assert "No dead code found" in result.output
 
+    @pytest.mark.asyncio
+    async def test_validate_uses_ignored_files_as_reference_sources(
+        self,
+        temp_project_dir: Path,
+    ) -> None:
+        """Ignored implementation files should not make referenced hooks look dead."""
+        (temp_project_dir / "plugin.py").write_text("""
+class TracePlugin:
+    def trace_archive(self):
+        return "archive"
+""")
+        ignored_runtime = temp_project_dir / "runtime.py"
+        ignored_runtime.write_text("""
+from plugin import TracePlugin
+
+plugin = TracePlugin()
+archive = plugin.trace_archive()
+""")
+
+        validator = HangingFunctionsValidator(
+            path=temp_project_dir,
+            ignore_paths=["runtime.py"],
+        )
+        result = await validator.validate()
+
+        assert result.success, result.output
+        assert "No dead code found" in result.output
+
     def test_display_name_property(self, temp_project_dir: Path) -> None:
         """Test that display_name property formats the name correctly."""
         validator = HangingFunctionsValidator(path=temp_project_dir)
-        
+
         # Should format underscores as title case
         assert validator.display_name == "Hanging Functions"

@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from determystic.configs.project import ProjectConfigManager
-from determystic.path_filters import iter_python_files
+from determystic.path_filters import is_ignored_path, iter_python_files
 from determystic.suppressions import SuppressionComments
 from determystic.validators.base import BaseValidator, ValidationResult
 
@@ -303,15 +303,27 @@ class HangingFunctionsValidator(BaseValidator):
         self.ignore_paths = ignore_paths or []
 
     @classmethod
-    def create_validators(cls, config_manager: ProjectConfigManager) -> list["BaseValidator"]:
+    def create_validators(
+        cls, config_manager: ProjectConfigManager
+    ) -> list["BaseValidator"]:
         """Factory function that creates a single dead-code validator instance."""
-        return [cls(path=config_manager.project_root, ignore_paths=config_manager.ignore_paths)]
+        return [
+            cls(
+                path=config_manager.project_root,
+                ignore_paths=config_manager.ignore_paths,
+            )
+        ]
 
     async def validate(self) -> ValidationResult:
         """Validate the codebase for dead code."""
         python_files = self._get_python_files(self.path)
+        reportable_python_files = iter_python_files(
+            self.path,
+            self.ignore_paths,
+            include_tests=False,
+        )
 
-        if not python_files:
+        if not reportable_python_files:
             return ValidationResult(success=True, output="No Python files found")
 
         script_entrypoints = self._get_script_entrypoints(self.path)
@@ -321,12 +333,15 @@ class HangingFunctionsValidator(BaseValidator):
         all_name_references: set[str] = set()
         all_attribute_references: set[str] = set()
         suppressions_by_module: dict[str, SuppressionComments] = {}
+        ignored_modules: set[str] = set()
 
         for py_file in python_files:
             try:
                 content = py_file.read_text(encoding="utf-8")
                 tree = ast.parse(content, filename=str(py_file))
                 relative_path = str(py_file.relative_to(self.path))
+                if is_ignored_path(py_file, self.path, self.ignore_paths):
+                    ignored_modules.add(relative_path)
                 suppressions = SuppressionComments.from_source(content, tree)
                 suppressions_by_module[relative_path] = suppressions
 
@@ -340,7 +355,9 @@ class HangingFunctionsValidator(BaseValidator):
                 reference_collector = ReferenceCollector()
                 reference_collector.visit(tree)
                 all_name_references.update(reference_collector.name_references)
-                all_attribute_references.update(reference_collector.attribute_references)
+                all_attribute_references.update(
+                    reference_collector.attribute_references
+                )
 
                 unreachable_collector = UnreachableCodeCollector(relative_path)
                 unreachable_collector.visit(tree)
@@ -356,9 +373,18 @@ class HangingFunctionsValidator(BaseValidator):
                 all_attribute_references,
                 script_entrypoints,
                 suppressions_by_module,
+                ignored_modules,
             ),
-            *self._find_unused_arguments(all_arguments, suppressions_by_module),
-            *self._find_unreachable_code(all_unreachable, suppressions_by_module),
+            *self._find_unused_arguments(
+                all_arguments,
+                suppressions_by_module,
+                ignored_modules,
+            ),
+            *self._find_unreachable_code(
+                all_unreachable,
+                suppressions_by_module,
+                ignored_modules,
+            ),
         ]
 
         if not issues:
@@ -368,7 +394,12 @@ class HangingFunctionsValidator(BaseValidator):
 
     def _get_python_files(self, path: Path) -> list[Path]:
         """Get all Python files, excluding test files and hidden directories."""
-        return iter_python_files(path, self.ignore_paths, include_tests=False)
+        return iter_python_files(
+            path,
+            self.ignore_paths,
+            include_tests=False,
+            include_ignored=True,
+        )
 
     def _get_script_entrypoints(self, path: Path) -> set[str]:
         """Extract script entrypoint function names from pyproject.toml."""
@@ -419,12 +450,17 @@ class HangingFunctionsValidator(BaseValidator):
         all_attribute_references: set[str],
         script_entrypoints: set[str],
         suppressions_by_module: dict[str, SuppressionComments],
+        ignored_modules: set[str],
     ) -> list[str]:
         issues = []
 
         for symbol in all_symbols:
+            if symbol.module_path in ignored_modules:
+                continue
             code = f"unused-{symbol.kind}"
-            suppressions = suppressions_by_module.get(symbol.module_path, SuppressionComments.empty())
+            suppressions = suppressions_by_module.get(
+                symbol.module_path, SuppressionComments.empty()
+            )
             if suppressions.suppresses(symbol.line_number, code):
                 continue
             if symbol.is_dunder or symbol.has_decorators or symbol.is_exported:
@@ -463,11 +499,16 @@ class HangingFunctionsValidator(BaseValidator):
         self,
         all_arguments: list[ArgumentDef],
         suppressions_by_module: dict[str, SuppressionComments],
+        ignored_modules: set[str],
     ) -> list[str]:
         issues = []
 
         for argument in all_arguments:
-            suppressions = suppressions_by_module.get(argument.module_path, SuppressionComments.empty())
+            if argument.module_path in ignored_modules:
+                continue
+            suppressions = suppressions_by_module.get(
+                argument.module_path, SuppressionComments.empty()
+            )
             if suppressions.suppresses(
                 argument.line_number,
                 "unused-argument",
@@ -485,11 +526,16 @@ class HangingFunctionsValidator(BaseValidator):
         self,
         all_unreachable: list[UnreachableStatement],
         suppressions_by_module: dict[str, SuppressionComments],
+        ignored_modules: set[str],
     ) -> list[str]:
         issues = []
 
         for statement in all_unreachable:
-            suppressions = suppressions_by_module.get(statement.module_path, SuppressionComments.empty())
+            if statement.module_path in ignored_modules:
+                continue
+            suppressions = suppressions_by_module.get(
+                statement.module_path, SuppressionComments.empty()
+            )
             if suppressions.suppresses(statement.line_number, "unreachable-code"):
                 continue
             issues.append(
@@ -536,13 +582,11 @@ def _statement_terminates(statement: ast.stmt) -> bool:
         return True
     if isinstance(statement, ast.If):
         return bool(statement.body and statement.orelse) and (
-            _body_terminates(statement.body)
-            and _body_terminates(statement.orelse)
+            _body_terminates(statement.body) and _body_terminates(statement.orelse)
         )
     if isinstance(statement, ast.Match):
         return bool(statement.cases) and all(
-            _body_terminates(case.body)
-            for case in statement.cases
+            _body_terminates(case.body) for case in statement.cases
         )
     return False
 
