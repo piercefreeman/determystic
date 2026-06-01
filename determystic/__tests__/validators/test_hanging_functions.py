@@ -571,6 +571,43 @@ result = instance.method("used", "unused")
         assert "Unreachable code after terminal statement" in result.output
 
     @pytest.mark.asyncio
+    async def test_validate_treats_imported_superclass_only_classes_as_referenced(
+        self,
+        temp_project_dir: Path,
+    ) -> None:
+        """Imported classes used only for inheritance should not look unused."""
+        base_file = temp_project_dir / "base.py"
+        base_file.write_text(
+            '''
+class BasePlugin:
+    pass
+'''
+        )
+
+        plugin_file = temp_project_dir / "plugin.py"
+        plugin_file.write_text(
+            '''
+from base import BasePlugin as PluginBase
+
+class ConcretePlugin(PluginBase):
+    pass
+'''
+        )
+
+        registry_file = temp_project_dir / "registry.py"
+        registry_file.write_text(
+            '''
+from plugin import ConcretePlugin
+'''
+        )
+
+        validator = HangingFunctionsValidator(path=temp_project_dir)
+        result = await validator.validate()
+
+        assert result.success, result.output
+        assert "No dead code found" in result.output
+
+    @pytest.mark.asyncio
     async def test_validate_respects_determystic_suppression_comments(
         self,
         temp_project_dir: Path,
