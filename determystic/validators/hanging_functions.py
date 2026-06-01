@@ -96,7 +96,7 @@ class ArgumentUsageCollector(ast.NodeVisitor):
         self.name_references: set[str] = set()
 
     def visit_Name(self, node: ast.Name) -> None:
-        if isinstance(node.ctx, ast.Load):
+        if isinstance(node.ctx, (ast.Load, ast.Del)):
             self.name_references.add(node.id)
         self.generic_visit(node)
 
@@ -122,6 +122,7 @@ class DefinitionCollector(ast.NodeVisitor):
         self.symbols: list[SymbolDef] = []
         self.arguments: list[ArgumentDef] = []
         self.class_stack: list[str] = []
+        self.protocol_stack: list[bool] = []
 
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
         class_name = ".".join([*self.class_stack, node.name])
@@ -138,7 +139,12 @@ class DefinitionCollector(ast.NodeVisitor):
         )
 
         self.class_stack.append(node.name)
+        self.protocol_stack.append(
+            bool(self.protocol_stack and self.protocol_stack[-1])
+            or any(_is_protocol_base(base) for base in node.bases)
+        )
         self.generic_visit(node)
+        self.protocol_stack.pop()
         self.class_stack.pop()
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
@@ -170,6 +176,9 @@ class DefinitionCollector(ast.NodeVisitor):
             return
 
         if is_method and node.name.startswith("visit_"):
+            return
+
+        if is_method and self.protocol_stack and self.protocol_stack[-1]:
             return
 
         usage_collector = ArgumentUsageCollector()
@@ -509,6 +518,16 @@ def _should_skip_argument(argument_name: str, is_method: bool) -> bool:
         return True
     if is_method and argument_name in {"self", "cls"}:
         return True
+    return False
+
+
+def _is_protocol_base(base: ast.expr) -> bool:
+    if isinstance(base, ast.Name):
+        return base.id == "Protocol"
+    if isinstance(base, ast.Attribute):
+        return base.attr == "Protocol"
+    if isinstance(base, ast.Subscript):
+        return _is_protocol_base(base.value)
     return False
 
 

@@ -608,6 +608,57 @@ from plugin import ConcretePlugin
         assert "No dead code found" in result.output
 
     @pytest.mark.asyncio
+    async def test_validate_treats_del_statement_as_argument_use(
+        self,
+        temp_project_dir: Path,
+    ) -> None:
+        """No-op hooks can explicitly consume intentionally unused arguments."""
+        python_code = '''
+class RuntimePluginBase:
+    def close(self, *, delete: bool = False) -> None:
+        del delete
+        return None
+
+plugin = RuntimePluginBase()
+plugin.close(delete=True)
+'''
+        python_file = temp_project_dir / "plugin_base.py"
+        python_file.write_text(python_code)
+
+        validator = HangingFunctionsValidator(path=temp_project_dir)
+        result = await validator.validate()
+
+        assert result.success, result.output
+        assert "No dead code found" in result.output
+
+    @pytest.mark.asyncio
+    async def test_validate_skips_protocol_stub_arguments(
+        self,
+        temp_project_dir: Path,
+    ) -> None:
+        """Protocol method signatures declare arguments without using them."""
+        python_code = '''
+from typing import Protocol
+
+class RuntimeDialog(Protocol):
+    async def accept(self, prompt_text: str = "") -> None:
+        """Accept the dialog."""
+
+async def use_dialog(dialog: RuntimeDialog) -> None:
+    await dialog.accept("value")
+
+entrypoint = use_dialog
+'''
+        python_file = temp_project_dir / "dialog_protocol.py"
+        python_file.write_text(python_code)
+
+        validator = HangingFunctionsValidator(path=temp_project_dir)
+        result = await validator.validate()
+
+        assert result.success, result.output
+        assert "No dead code found" in result.output
+
+    @pytest.mark.asyncio
     async def test_validate_respects_determystic_suppression_comments(
         self,
         temp_project_dir: Path,
