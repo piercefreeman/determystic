@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from determystic.configs.project import ProjectConfigManager
-from determystic.path_filters import iter_python_files
+from determystic.path_filters import is_ignored_path, iter_python_files
 from determystic.suppressions import SuppressionComments
 from determystic.validators.base import BaseValidator, ValidationResult
 
@@ -86,11 +86,17 @@ class ModuleInfo:
     tree: ast.Module
     functions: dict[str, FunctionDefinition] = field(default_factory=dict)
     classes: dict[str, dict[str, FunctionDefinition]] = field(default_factory=dict)
-    definitions_by_parent: dict[ParentKey, list[FunctionDefinition]] = field(default_factory=dict)
+    definitions_by_parent: dict[ParentKey, list[FunctionDefinition]] = field(
+        default_factory=dict
+    )
+    class_attribute_annotations: dict[str, dict[str, ast.expr]] = field(
+        default_factory=dict
+    )
     module_bindings: dict[str, str] = field(default_factory=dict)
     symbol_bindings: dict[str, ImportedSymbol] = field(default_factory=dict)
     explicit_exports: set[str] = field(default_factory=set)
     suppressions: SuppressionComments = field(default_factory=SuppressionComments.empty)
+    is_ignored: bool = False
 
     @property
     def canonical_module(self) -> str:
@@ -111,6 +117,7 @@ class ReferenceIndex:
 
     internal: set[DefinitionKey] = field(default_factory=set)
     external: set[DefinitionKey] = field(default_factory=set)
+    unresolved_attribute_names: set[str] = field(default_factory=set)
 
 
 class DefinitionCollector:
@@ -146,8 +153,20 @@ class DefinitionCollector:
                 definition = self._create_definition(child, class_name, parent_key)
                 self.module.classes[class_name][definition.name] = definition
                 self.module.definitions_by_parent[parent_key].append(definition)
+            elif isinstance(child, ast.AnnAssign):
+                self._collect_class_attribute_annotation(child, class_name)
             elif isinstance(child, ast.ClassDef):
                 self._collect_class_body(child, [*class_stack, node.name])
+
+    def _collect_class_attribute_annotation(
+        self,
+        node: ast.AnnAssign,
+        class_name: str,
+    ) -> None:
+        if isinstance(node.target, ast.Name):
+            self.module.class_attribute_annotations.setdefault(class_name, {})[
+                node.target.id
+            ] = node.annotation
 
     def _create_definition(
         self,
@@ -263,6 +282,10 @@ class ReferenceCollector(ast.NodeVisitor):
     def _bind_assignment_target(self, target: ast.expr, class_ref: ClassRef) -> None:
         if isinstance(target, ast.Name):
             self.scope_stack[-1][target.id] = class_ref
+        elif isinstance(target, ast.Attribute):
+            parts = self._dotted_parts(target)
+            if parts:
+                self.scope_stack[-1][".".join(parts)] = class_ref
         elif isinstance(target, (ast.Tuple, ast.List)):
             for element in target.elts:
                 self._bind_assignment_target(element, class_ref)
@@ -285,6 +308,9 @@ class ReferenceCollector(ast.NodeVisitor):
         function_key = self._resolve_function_attribute(node)
         if function_key:
             self._record_definition_reference(function_key)
+            return
+
+        self.references.unresolved_attribute_names.add(node.attr)
 
     def _record_definition_reference(self, key: DefinitionKey) -> None:
         if key.class_name is None:
@@ -363,6 +389,16 @@ class ReferenceCollector(ast.NodeVisitor):
             if bound_class:
                 return bound_class
 
+        if isinstance(node, ast.Attribute):
+            parts = self._dotted_parts(node)
+            if parts:
+                bound_class = self._lookup_bound_class(".".join(parts))
+                if bound_class:
+                    return bound_class
+            receiver_class = self._infer_expr_class(node.value)
+            if receiver_class:
+                return self._resolve_class_attribute(receiver_class, node.attr)
+
         return self._resolve_class_expr(node)
 
     def _resolve_class_expr(self, node: ast.expr) -> ClassRef | None:
@@ -388,6 +424,65 @@ class ReferenceCollector(ast.NodeVisitor):
         for prefix_length in range(len(parts), 0, -1):
             prefix = ".".join(parts[:prefix_length])
             target_module_name = self.module.module_bindings.get(prefix)
+            if not target_module_name:
+                continue
+
+            target_module = self.project.modules_by_name.get(target_module_name)
+            if not target_module:
+                continue
+
+            remaining_parts = parts[prefix_length:]
+            if len(remaining_parts) == 1 and remaining_parts[0] in target_module.classes:
+                return ClassRef(target_module.relative_path, remaining_parts[0])
+
+        return None
+
+    def _resolve_class_attribute(
+        self,
+        receiver_class: ClassRef,
+        attribute_name: str,
+    ) -> ClassRef | None:
+        target_module = self.project.modules_by_path.get(receiver_class.module_path)
+        if not target_module:
+            return None
+
+        annotation = target_module.class_attribute_annotations.get(
+            receiver_class.class_name,
+            {},
+        ).get(attribute_name)
+        if annotation is None:
+            return None
+        return self._resolve_class_expr_for_module(annotation, target_module)
+
+    def _resolve_class_expr_for_module(
+        self,
+        node: ast.expr,
+        module: ModuleInfo,
+    ) -> ClassRef | None:
+        if isinstance(node, ast.Subscript):
+            return self._resolve_class_expr_for_module(node.value, module)
+
+        if isinstance(node, ast.Name):
+            symbol = module.symbol_bindings.get(node.id)
+            if symbol:
+                target_module = self.project.modules_by_name.get(symbol.module_name)
+                if target_module and symbol.symbol_name in target_module.classes:
+                    return ClassRef(target_module.relative_path, symbol.symbol_name)
+
+            if node.id in module.classes:
+                return ClassRef(module.relative_path, node.id)
+            return None
+
+        if not isinstance(node, ast.Attribute):
+            return None
+
+        parts = self._dotted_parts(node)
+        if not parts:
+            return None
+
+        for prefix_length in range(len(parts), 0, -1):
+            prefix = ".".join(parts[:prefix_length])
+            target_module_name = module.module_bindings.get(prefix)
             if not target_module_name:
                 continue
 
@@ -448,7 +543,12 @@ class FunctionVisibilityValidator(BaseValidator):
             return ValidationResult(success=True, output="No project path configured")
 
         python_files = self._get_python_files(self.path)
-        if not python_files:
+        reportable_python_files = iter_python_files(
+            self.path,
+            self.ignore_paths,
+            include_tests=False,
+        )
+        if not reportable_python_files:
             return ValidationResult(success=True, output="No Python files found")
 
         project = self._build_project_index(python_files)
@@ -463,7 +563,12 @@ class FunctionVisibilityValidator(BaseValidator):
 
     def _get_python_files(self, path: Path) -> list[Path]:
         """Get Python files that should be included in project analysis."""
-        return iter_python_files(path, self.ignore_paths, include_tests=False)
+        return iter_python_files(
+            path,
+            self.ignore_paths,
+            include_tests=False,
+            include_ignored=True,
+        )
 
     def _build_project_index(self, python_files: list[Path]) -> ProjectIndex:
         modules_by_path: dict[str, ModuleInfo] = {}
@@ -487,6 +592,7 @@ class FunctionVisibilityValidator(BaseValidator):
                 module_names=module_names,
                 tree=tree,
                 suppressions=SuppressionComments.from_source(content, tree),
+                is_ignored=is_ignored_path(py_file, self.path, self.ignore_paths),
             )
             modules_by_path[relative_path] = module
 
@@ -519,6 +625,14 @@ class FunctionVisibilityValidator(BaseValidator):
         full_name = self._module_name_from_parts(path_parts)
         if full_name and full_name not in module_names:
             module_names.append(full_name)
+
+        for index in range(len(path_parts) - 1):
+            package_init = self.path.joinpath(*path_parts[: index + 1], "__init__.py")
+            if not package_init.exists():
+                continue
+            package_name = self._module_name_from_parts(path_parts[index:])
+            if package_name and package_name not in module_names:
+                module_names.append(package_name)
 
         return module_names
 
@@ -638,6 +752,8 @@ class FunctionVisibilityValidator(BaseValidator):
         issues: list[str] = []
 
         for module in project.modules_by_path.values():
+            if module.is_ignored:
+                continue
             for definition in self._all_definitions(module):
                 if (
                     self._requires_private_prefix(definition, module, references, script_entrypoints)
@@ -668,7 +784,10 @@ class FunctionVisibilityValidator(BaseValidator):
         if definition.is_private or self._is_special_public(definition, module, script_entrypoints):
             return False
 
-        return definition.key in references.internal and definition.key not in references.external
+        return (
+            definition.key in references.internal
+            and not self._is_externally_referenced(definition, references)
+        )
 
     def _find_ordering_issues(
         self,
@@ -709,7 +828,21 @@ class FunctionVisibilityValidator(BaseValidator):
         if definition.is_private:
             return True
 
-        return definition.key in references.internal and definition.key not in references.external
+        return (
+            definition.key in references.internal
+            and not self._is_externally_referenced(definition, references)
+        )
+
+    def _is_externally_referenced(
+        self,
+        definition: FunctionDefinition,
+        references: ReferenceIndex,
+    ) -> bool:
+        if definition.key in references.external:
+            return True
+        if not definition.is_method:
+            return False
+        return definition.name in references.unresolved_attribute_names
 
     def _is_special_public(
         self,

@@ -94,6 +94,137 @@ def test_load_config_handles_missing_file():
         assert "FileNotFoundError" in result.output
 
     @pytest.mark.asyncio
+    async def test_validate_infers_function_coverage_from_test_exception_evidence(
+        self,
+        temp_project_dir: Path,
+    ) -> None:
+        """A test call plus local exception evidence can satisfy coverage."""
+        (temp_project_dir / "service.py").write_text("""
+def load_config(reader):
+    try:
+        return reader()
+    except FileNotFoundError:
+        return {}
+""")
+        (temp_project_dir / "test_service.py").write_text("""
+from service import load_config
+
+
+def test_load_config_handles_missing_file():
+    def missing_file():
+        raise FileNotFoundError("missing")
+
+    assert load_config(missing_file) == {}
+""")
+
+        validator = ExceptionCoverageValidator(path=temp_project_dir)
+        result = await validator.validate()
+
+        assert result.success
+
+    @pytest.mark.asyncio
+    async def test_validate_infers_coverage_from_exception_constructor_evidence(
+        self,
+        temp_project_dir: Path,
+    ) -> None:
+        """Exception instances passed through test helpers count as evidence."""
+        (temp_project_dir / "service.py").write_text("""
+def request_status(fetcher):
+    try:
+        return fetcher()
+    except RuntimeError:
+        return "unavailable"
+""")
+        (temp_project_dir / "test_service.py").write_text("""
+from service import request_status
+
+
+def test_request_status_handles_runtime_error():
+    error = RuntimeError("broker unavailable")
+
+    def fetcher():
+        raise error
+
+    assert request_status(fetcher) == "unavailable"
+""")
+
+        validator = ExceptionCoverageValidator(path=temp_project_dir)
+        result = await validator.validate()
+
+        assert result.success
+
+    @pytest.mark.asyncio
+    async def test_validate_infers_method_coverage_from_instance_call(
+        self,
+        temp_project_dir: Path,
+    ) -> None:
+        """Instance method calls can cover broad exception handlers."""
+        (temp_project_dir / "worker.py").write_text("""
+class Worker:
+    def run(self, callback):
+        try:
+            callback()
+        except Exception:
+            return "failed"
+        return "ok"
+""")
+        (temp_project_dir / "test_worker.py").write_text("""
+from worker import Worker
+
+
+def test_worker_handles_runtime_error():
+    def fail():
+        raise RuntimeError("boom")
+
+    worker = Worker()
+    assert worker.run(fail) == "failed"
+""")
+
+        validator = ExceptionCoverageValidator(path=temp_project_dir)
+        result = await validator.validate()
+
+        assert result.success
+
+    @pytest.mark.asyncio
+    async def test_validate_infers_package_root_module_alias_coverage(
+        self,
+        temp_project_dir: Path,
+    ) -> None:
+        """Service-dir imports can cover monorepo-root requirement targets."""
+        service_dir = (
+            temp_project_dir
+            / "services"
+            / "browser-control"
+            / "browser_control_service"
+        )
+        test_dir = service_dir / "__tests__"
+        test_dir.mkdir(parents=True)
+        (service_dir / "__init__.py").write_text("")
+        (service_dir / "payloads.py").write_text("""
+def body_payload(data):
+    try:
+        return {"text": data.decode("utf-8")}
+    except UnicodeDecodeError:
+        return {"binary": True}
+""")
+        (test_dir / "test_payloads.py").write_text("""
+import pytest
+from browser_control_service import payloads as payloads_module
+
+
+def test_body_payload_handles_binary_body():
+    with pytest.raises(UnicodeDecodeError):
+        b"\\xff".decode("utf-8")
+
+    assert payloads_module.body_payload(b"\\xff") == {"binary": True}
+""")
+
+        validator = ExceptionCoverageValidator(path=temp_project_dir)
+        result = await validator.validate()
+
+        assert result.success
+
+    @pytest.mark.asyncio
     async def test_validate_requires_each_exception_in_tuple_handler(
         self,
         temp_project_dir: Path,
@@ -117,7 +248,10 @@ def test_load_config_handles_missing_file():
 
         assert not result.success
         assert "ValueError" in result.output
-        assert "FileNotFoundError' in service.load_config is not marked" not in result.output
+        assert (
+            "FileNotFoundError' in service.load_config is not marked"
+            not in result.output
+        )
 
     @pytest.mark.asyncio
     async def test_validate_accepts_marker_above_decorator(
@@ -170,7 +304,10 @@ def test_load_config_handles_missing_file():
 
         assert not result.success
         assert "does not catch that exception" in result.output
-        assert "no production function with except handlers matches that name" in result.output
+        assert (
+            "no production function with except handlers matches that name"
+            in result.output
+        )
 
     @pytest.mark.asyncio
     async def test_validate_requires_marker_above_test_function(
@@ -222,6 +359,41 @@ def load_config():
 
         assert result.success
         assert result.output == "All except handlers are marked as tested"
+
+    @pytest.mark.asyncio
+    async def test_validate_uses_ignored_tests_as_coverage_sources(
+        self,
+        temp_project_dir: Path,
+    ) -> None:
+        """Ignored test files can prove production exception coverage."""
+        ignored_tests_dir = temp_project_dir / "ignored_tests"
+        ignored_tests_dir.mkdir()
+        (temp_project_dir / "service.py").write_text("""
+def parse_int(value):
+    try:
+        return int(value)
+    except ValueError:
+        return 0
+""")
+        (ignored_tests_dir / "test_service.py").write_text("""
+import pytest
+from service import parse_int
+
+
+def test_parse_int_handles_invalid_value():
+    with pytest.raises(ValueError):
+        int("bad")
+
+    assert parse_int("bad") == 0
+""")
+
+        validator = ExceptionCoverageValidator(
+            path=temp_project_dir,
+            ignore_paths=["ignored_tests/"],
+        )
+        result = await validator.validate()
+
+        assert result.success
 
     # determystic: tested-exceptions[determystic.validators.exception_coverage.ExceptionCoverageValidator._parse_python_file: SyntaxError, UnicodeDecodeError]
     def test_parse_python_file_skips_unparseable_files(self, tmp_path: Path) -> None:
