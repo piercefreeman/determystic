@@ -81,6 +81,13 @@ class ReferenceCollector(ast.NodeVisitor):
             self.attribute_references.add(node.attr)
         self.generic_visit(node)
 
+    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
+        """Treat imported symbols as references to their defining names."""
+        for alias in node.names:
+            if alias.name != "*":
+                self.name_references.add(alias.name)
+        self.generic_visit(node)
+
 
 class ArgumentUsageCollector(ast.NodeVisitor):
     """Collect local argument references within one function body."""
