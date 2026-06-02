@@ -1,10 +1,12 @@
 """Isolated environment runner for agent test execution."""
 
-import tempfile
+import json
+import os
+import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import Optional
-import shutil
 
 from determystic.io import get_determystic_package_path
 
@@ -44,10 +46,12 @@ class IsolatedEnv:
         try:
             # Create the temporary package
             package_dir = self._create_test_package(validator_code, test_code)
+            env = self._subprocess_env()
             
             result = subprocess.run(
                 ["uv", "run", "pytest", "test_validator.py", "-v"],
                 cwd=package_dir,
+                env=env,
                 capture_output=True,
                 text=True,
                 timeout=30
@@ -81,7 +85,10 @@ class IsolatedEnv:
         package_dir = self.temp_dir / "temp_validator"
         package_dir.mkdir(parents=True)
 
-        # Create pyproject.toml with local determystic dependency
+        dependency_specs = self._dependency_specs()
+        dependency_lines = ",\n".join(f"    {json.dumps(spec)}" for spec in dependency_specs)
+
+        # Create pyproject.toml with the dependencies needed by generated tests.
         pyproject_content = f'''[build-system]
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
@@ -90,8 +97,7 @@ build-backend = "setuptools.build_meta"
 name = "temp-validator"
 version = "0.1.0"
 dependencies = [
-    "determystic @ file://{self.determystic_package_path.absolute()}",
-    "pytest>=6.0"
+{dependency_lines}
 ]
 
 [tool.setuptools.packages.find]
@@ -107,3 +113,33 @@ where = ["."]
         (package_dir / "test_validator.py").write_text(test_code)
 
         return package_dir
+
+    def _has_installable_determystic_source(self) -> bool:
+        """Return whether the resolved path can be installed as a Python project."""
+        root = self.determystic_package_path
+        return (root / "pyproject.toml").exists() or (root / "setup.py").exists()
+
+    def _dependency_specs(self) -> list[str]:
+        """Build dependency specs for the temporary pytest project."""
+        if self._has_installable_determystic_source():
+            return [
+                f"determystic @ file://{self.determystic_package_path.absolute()}",
+                "pytest>=6.0",
+            ]
+
+        return ["pytest>=6.0"]
+
+    def _subprocess_env(self) -> dict[str, str]:
+        """Build the subprocess environment for the isolated pytest run."""
+        env = os.environ.copy()
+        if self._has_installable_determystic_source():
+            return env
+
+        package_parent = str(self.determystic_package_path.absolute())
+        existing_pythonpath = env.get("PYTHONPATH")
+        env["PYTHONPATH"] = (
+            f"{package_parent}{os.pathsep}{existing_pythonpath}"
+            if existing_pythonpath
+            else package_parent
+        )
+        return env
