@@ -5,7 +5,6 @@ import os
 import shutil
 import subprocess
 import tempfile
-from importlib import metadata
 from pathlib import Path
 from typing import Optional
 
@@ -122,17 +121,13 @@ where = ["."]
 
     def _dependency_specs(self) -> list[str]:
         """Build dependency specs for the temporary pytest project."""
-        specs = ["pytest>=6.0"]
-
         if self._has_installable_determystic_source():
-            specs.insert(
-                0,
+            return [
                 f"determystic @ file://{self.determystic_package_path.absolute()}",
-            )
-            return specs
+                "pytest>=6.0",
+            ]
 
-        specs.extend(_installed_determystic_runtime_dependencies())
-        return _dedupe_dependency_specs(specs)
+        return ["pytest>=6.0"]
 
     def _subprocess_env(self) -> dict[str, str]:
         """Build the subprocess environment for the isolated pytest run."""
@@ -148,25 +143,3 @@ where = ["."]
             else package_parent
         )
         return env
-
-
-def _installed_determystic_runtime_dependencies() -> list[str]:
-    """Return runtime dependency specs from installed package metadata."""
-    try:
-        dist = metadata.distribution("determystic")
-    except metadata.PackageNotFoundError:
-        return ["pydantic>=2.0.0"]
-
-    return list(dist.requires or []) or ["pydantic>=2.0.0"]
-
-
-def _dedupe_dependency_specs(specs: list[str]) -> list[str]:
-    """Deduplicate dependency specs while preserving order."""
-    seen: set[str] = set()
-    deduped: list[str] = []
-    for spec in specs:
-        if spec in seen:
-            continue
-        seen.add(spec)
-        deduped.append(spec)
-    return deduped

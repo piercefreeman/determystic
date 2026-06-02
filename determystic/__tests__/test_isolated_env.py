@@ -2,10 +2,9 @@
 
 import os
 import subprocess
-from importlib import metadata
 from unittest.mock import patch
 
-from determystic.isolated_env import IsolatedEnv, _installed_determystic_runtime_dependencies
+from determystic.isolated_env import IsolatedEnv
 
 
 # determystic: tested-exceptions[determystic.isolated_env.IsolatedEnv.run_tests: TimeoutExpired]
@@ -71,16 +70,12 @@ def test_create_test_package_uses_import_path_when_no_project_root(tmp_path) -> 
     env.temp_dir = tmp_path
     env.determystic_package_path = site_packages
 
-    with patch(
-        "determystic.isolated_env._installed_determystic_runtime_dependencies",
-        return_value=["pydantic>=2.0.0"],
-    ):
-        package_dir = env._create_test_package("validator", "tests")
+    package_dir = env._create_test_package("validator", "tests")
 
     pyproject = (package_dir / "pyproject.toml").read_text()
 
     assert "determystic @ file://" not in pyproject
-    assert '"pydantic>=2.0.0"' in pyproject
+    assert '"pytest>=6.0"' in pyproject
     assert not (package_dir / "determystic").exists()
 
 
@@ -98,13 +93,7 @@ def test_run_tests_adds_installed_package_parent_to_pythonpath(tmp_path) -> None
         stderr="",
     )
 
-    with (
-        patch(
-            "determystic.isolated_env._installed_determystic_runtime_dependencies",
-            return_value=["pydantic>=2.0.0"],
-        ),
-        patch("determystic.isolated_env.subprocess.run", return_value=completed) as mock_run,
-    ):
+    with patch("determystic.isolated_env.subprocess.run", return_value=completed) as mock_run:
         success, output = env.run_tests("validator", "tests")
 
     run_env = mock_run.call_args.kwargs["env"]
@@ -113,13 +102,3 @@ def test_run_tests_adds_installed_package_parent_to_pythonpath(tmp_path) -> None
     assert success is True
     assert output == "tests passed"
     assert pythonpath_entries[0] == str(site_packages.absolute())
-
-
-# determystic: tested-exceptions[determystic.isolated_env._installed_determystic_runtime_dependencies: metadata.PackageNotFoundError]
-def test_installed_determystic_runtime_dependencies_falls_back_when_metadata_is_missing() -> None:
-    """Missing installed metadata should still provide the minimal runtime dependency."""
-    with patch(
-        "determystic.isolated_env.metadata.distribution",
-        side_effect=metadata.PackageNotFoundError,
-    ):
-        assert _installed_determystic_runtime_dependencies() == ["pydantic>=2.0.0"]
