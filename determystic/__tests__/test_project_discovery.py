@@ -63,6 +63,7 @@ enabled = ["all"]
 
 [tool.uv.workspace]
 members = ["packages/*"]
+exclude = ["standalone-tool"]
 """
     )
     member_root = tmp_path / "packages" / "api"
@@ -95,11 +96,12 @@ enabled = ["all"]
 
 [tool.uv.workspace]
 members = ["packages/*"]
+exclude = ["standalone-tool"]
 """
     )
     (tmp_path / "packages" / "worker").mkdir(parents=True)
-    _write_pyproject(tmp_path / "captcha-solver-poc", "captcha-solver-poc")
-    _write_setup_py(tmp_path / "services" / "browser-control")
+    _write_pyproject(tmp_path / "standalone-tool", "standalone-tool")
+    _write_setup_py(tmp_path / "services" / "worker-service")
 
     targets = discover_validation_targets(tmp_path)
 
@@ -109,15 +111,15 @@ members = ["packages/*"]
     }
     assert set(target_map) == {
         ".",
-        "captcha-solver-poc",
+        "standalone-tool",
         "packages/worker",
-        "services/browser-control",
+        "services/worker-service",
     }
     assert all(target.config_path == tmp_path / "pyproject.toml" for target in target_map.values())
     assert target_map["."].extra_ignore_paths == (
-        "captcha-solver-poc",
         "packages/worker",
-        "services/browser-control",
+        "services/worker-service",
+        "standalone-tool",
     )
 
 

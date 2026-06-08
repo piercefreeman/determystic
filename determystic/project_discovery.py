@@ -60,15 +60,23 @@ def discover_validation_targets(start_path: Path) -> list[ValidationTarget]:
         )
         workspace_targets = _discover_uv_workspace_targets(start, root_pyproject)
         workspace_exclude = _uv_workspace_exclude_patterns(root_pyproject)
+        workspace_members = _uv_workspace_member_patterns(root_pyproject)
         project_roots = _find_project_roots(start)
         if workspace_exclude:
             project_roots = [
                 project_root
                 for project_root in project_roots
-                if not _is_excluded_workspace_member(
-                    project_root,
-                    start,
-                    workspace_exclude,
+                if not (
+                    _is_workspace_member_candidate(
+                        project_root,
+                        start,
+                        workspace_members,
+                    )
+                    and _is_excluded_workspace_member(
+                        project_root,
+                        start,
+                        workspace_exclude,
+                    )
                 )
             ]
         if workspace_targets or len(project_roots) > 1:
@@ -242,6 +250,27 @@ def _uv_workspace_exclude_patterns(pyproject_path: Path) -> list[str]:
     if not isinstance(workspace, dict):
         return []
     return _string_list(workspace.get("exclude"))
+
+
+def _uv_workspace_member_patterns(pyproject_path: Path) -> list[str]:
+    data = _load_pyproject(pyproject_path)
+    workspace = data.get("tool", {}).get("uv", {}).get("workspace")
+    if not isinstance(workspace, dict):
+        return []
+    return _string_list(workspace.get("members"))
+
+
+def _is_workspace_member_candidate(
+    project_root: Path,
+    workspace_root: Path,
+    member_patterns: list[str],
+) -> bool:
+    resolved_project_root = project_root.resolve()
+    return any(
+        member_root == resolved_project_root
+        for member_pattern in member_patterns
+        for member_root in _glob_workspace_member_dirs(workspace_root, member_pattern)
+    )
 
 
 def _find_project_roots(root: Path) -> list[Path]:

@@ -5,14 +5,16 @@ from typing import cast
 
 from rich.console import Console
 
+import determystic.cli.validate as validate_module
 from determystic.cli.validate import (
     ValidationJob,
     _create_status_table,
     _create_validation_jobs,
+    _print_detailed_results,
     _target_label,
 )
 from determystic.project_discovery import ValidationTarget
-from determystic.validators.base import BaseValidator
+from determystic.validators.base import BaseValidator, ValidationResult
 
 
 def test_create_validation_jobs_scopes_inherited_config_to_target_root(tmp_path) -> None:
@@ -90,7 +92,7 @@ def test_status_rendering_uses_separate_tables_for_each_scope() -> None:
         ValidationJob(
             key="poc:future",
             validator=validator,
-            target_label="captcha-solver-poc",
+            target_label="standalone-tool",
         ),
     ]
     console = Console(record=True, width=120, color_system=None)
@@ -99,8 +101,51 @@ def test_status_rendering_uses_separate_tables_for_each_scope() -> None:
     output = console.export_text()
 
     assert "Scope: ." in output
-    assert "Scope: captcha-solver-poc" in output
+    assert "Scope: standalone-tool" in output
     assert "│ Scope " not in output
+
+
+def test_detailed_results_are_grouped_by_scope(monkeypatch) -> None:
+    """Detailed failures use scope sections instead of repeated prefixed headings."""
+    validator = cast(
+        BaseValidator,
+        SimpleNamespace(
+            name="static_analysis",
+            display_name="Static Analysis",
+        ),
+    )
+    jobs = [
+        ValidationJob(
+            key="root:static",
+            validator=validator,
+            target_label=".",
+        ),
+        ValidationJob(
+            key="poc:static",
+            validator=validator,
+            target_label="standalone-tool",
+        ),
+    ]
+    results = {
+        "root:static": ValidationResult(success=False, output="root failure"),
+        "poc:static": ValidationResult(success=False, output="poc failure"),
+    }
+    console = Console(record=True, width=120, color_system=None)
+    monkeypatch.setattr(validate_module, "console", console)
+
+    _print_detailed_results(
+        jobs,
+        results,
+        verbose=False,
+        include_scope=True,
+    )
+    output = console.export_text()
+
+    assert "Scope: ." in output
+    assert "Scope: standalone-tool" in output
+    assert "✗ Static Analysis" in output
+    assert ". / Static Analysis" not in output
+    assert "standalone-tool / Static Analysis" not in output
 
 
 # determystic: tested-exceptions[determystic.cli.validate._target_label: ValueError]

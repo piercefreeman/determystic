@@ -236,27 +236,12 @@ async def _run_validation_targets(
 
     # Show detailed output if verbose or if there were failures
     if verbose or not all_passed:
-        console.print("\n[bold]Detailed Results:[/bold]\n")
-
-        for job in jobs:
-            result = results[job.key]
-            validator_display = job.validator.display_name
-            if include_scope:
-                validator_display = f"{job.target_label} / {validator_display}"
-
-            if result.success:
-                if verbose:  # Only show passed validators in verbose mode
-                    console.print(f"[green]✓[/green] [bold]{validator_display}[/bold]")
-                    if result.output.strip():
-                        console.print(f"[dim]{result.output.strip()}[/dim]")
-                    console.print()
-            else:
-                console.print(f"[red]✗[/red] [bold]{validator_display}[/bold]")
-                if result.output.strip():
-                    # Indent the output for better readability
-                    for line in result.output.strip().split("\n"):
-                        console.print(f"  {line}")
-                console.print()
+        _print_detailed_results(
+            jobs,
+            results,
+            verbose=verbose,
+            include_scope=include_scope,
+        )
 
     # Set exit code based on results
     if not all_passed:
@@ -285,6 +270,41 @@ def _create_validation_jobs(
                 )
             )
     return jobs
+
+
+def _print_detailed_results(
+    jobs: list[ValidationJob],
+    results: dict[str, ValidationResult],
+    *,
+    verbose: bool,
+    include_scope: bool,
+) -> None:
+    console.print("\n[bold]Detailed Results:[/bold]\n")
+
+    grouped_jobs = _jobs_by_scope(jobs) if include_scope else {"": jobs}
+    for scope_index, (scope, scope_jobs) in enumerate(grouped_jobs.items()):
+        if include_scope:
+            if scope_index > 0:
+                console.print()
+            console.print(f"[bold cyan]Scope: {scope}[/bold cyan]")
+
+        for job in scope_jobs:
+            result = results[job.key]
+            validator_display = job.validator.display_name
+
+            if result.success:
+                if verbose:  # Only show passed validators in verbose mode
+                    console.print(f"[green]✓[/green] [bold]{validator_display}[/bold]")
+                    if result.output.strip():
+                        console.print(f"[dim]{result.output.strip()}[/dim]")
+                    console.print()
+            else:
+                console.print(f"[red]✗[/red] [bold]{validator_display}[/bold]")
+                if result.output.strip():
+                    # Indent the output for better readability
+                    for line in result.output.strip().split("\n"):
+                        console.print(f"  {line}")
+                console.print()
 
 
 def _target_label(target: ValidationTarget, requested_path: Path) -> str:

@@ -153,7 +153,7 @@ value = public_api()
     ) -> None:
         """Monorepo service packages are often imported from their package root."""
         service_package = (
-            temp_project_dir / "services" / "browser-control" / "browser_control_service"
+            temp_project_dir / "services" / "worker-service" / "control_plane_service"
         )
         service_package.mkdir(parents=True)
         (service_package / "__init__.py").write_text("")
@@ -162,7 +162,7 @@ def redact_text(value):
     return value
 """)
         (service_package / "runtime.py").write_text("""
-from browser_control_service.redaction import redact_text as _redact_text
+from control_plane_service.redaction import redact_text as _redact_text
 
 value = _redact_text("secret")
 """)

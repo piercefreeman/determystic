@@ -194,8 +194,8 @@ def test_worker_handles_runtime_error():
         service_dir = (
             temp_project_dir
             / "services"
-            / "browser-control"
-            / "browser_control_service"
+            / "worker-service"
+            / "control_plane_service"
         )
         test_dir = service_dir / "__tests__"
         test_dir.mkdir(parents=True)
@@ -209,7 +209,7 @@ def body_payload(data):
 """)
         (test_dir / "test_payloads.py").write_text("""
 import pytest
-from browser_control_service import payloads as payloads_module
+from control_plane_service import payloads as payloads_module
 
 
 def test_body_payload_handles_binary_body():
