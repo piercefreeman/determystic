@@ -107,6 +107,14 @@ Determystic includes bundled validators that can replace parts of a conventional
 You can customize which validators run in your project by adding a `[tool.determystic]` section to your project `pyproject.toml`. The configuration supports enabling bundled validators, excluding specific validators from running, and ignoring generated or vendored paths.
 Generated custom validator metadata is also tracked in this section; the generated validator source files still live under `.determystic/`.
 
+### Workspaces And Multi-Project Repos
+
+When `validate` runs against a directory with `[tool.uv.workspace]`, Determystic validates the workspace root and each included member as isolated project scopes. A root `[tool.determystic]` config is inherited by workspace members unless a member defines its own `[tool.determystic]` section.
+
+Repos without uv workspace metadata but with multiple nested Python project markers are handled similarly: each project is validated independently, and parent scopes ignore nested project directories so project-wide validators do not analyze subprojects as one flattened codebase. Determystic treats `pyproject.toml`, `setup.py`, and `setup.cfg` as Python project markers.
+
+`ignore_paths` entries are relative to the project scope being validated. Generated custom validator files remain relative to the `pyproject.toml` that owns the `[tool.determystic]` config.
+
 ### Enabling Bundled Validators
 
 To enable bundled validators, add their names to the `enabled` list in your config:
@@ -237,4 +245,3 @@ validator_agent = "claude"
 - Since determystic files are on disk, they should be portable across projects and usable by CI validation across a team
 - Right now we don't support the editing case for existing validators - but this seems like an obvious extension in the future to try and make these more flexible given additional code that either incorrectly validates or does not validate
 - The bundled verifiers are themselves all AI-coded. We provide them for convenience instead of a guarantee of accuracy.
-

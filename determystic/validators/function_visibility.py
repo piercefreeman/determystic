@@ -528,14 +528,22 @@ class FunctionVisibilityValidator(BaseValidator):
         name: str = "function_visibility",
         path: Path | None = None,
         ignore_paths: list[str] | None = None,
+        isolation_paths: list[str] | None = None,
     ) -> None:
         super().__init__(name=name, path=path)
         self.ignore_paths = ignore_paths or []
+        self.isolation_paths = isolation_paths or []
 
     @classmethod
     def create_validators(cls, config_manager: ProjectConfigManager) -> list["BaseValidator"]:
         """Create the built-in function visibility validator."""
-        return [cls(path=config_manager.project_root, ignore_paths=config_manager.ignore_paths)]
+        return [
+            cls(
+                path=config_manager.project_root,
+                ignore_paths=config_manager.ignore_paths,
+                isolation_paths=config_manager.isolation_paths,
+            )
+        ]
 
     async def validate(self) -> ValidationResult:
         """Validate function visibility across the project."""
@@ -547,6 +555,7 @@ class FunctionVisibilityValidator(BaseValidator):
             self.path,
             self.ignore_paths,
             include_tests=False,
+            isolation_paths=self.isolation_paths,
         )
         if not reportable_python_files:
             return ValidationResult(success=True, output="No Python files found")
@@ -568,6 +577,7 @@ class FunctionVisibilityValidator(BaseValidator):
             self.ignore_paths,
             include_tests=False,
             include_ignored=True,
+            isolation_paths=self.isolation_paths,
         )
 
     def _build_project_index(self, python_files: list[Path]) -> ProjectIndex:

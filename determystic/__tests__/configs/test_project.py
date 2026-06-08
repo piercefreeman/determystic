@@ -340,6 +340,47 @@ allowed_names = ["framework_hook"]
                     "allowed_names": ["framework_hook"]
                 }
 
+    def test_load_from_config_path_can_validate_different_project_root(self) -> None:
+        """Inherited configs keep file paths config-relative and validation root scoped."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            member_root = workspace_root / "packages" / "api"
+            member_root.mkdir(parents=True)
+            config_file = workspace_root / "pyproject.toml"
+            config_file.write_text(
+                """
+[project]
+name = "workspace"
+
+[tool.determystic]
+ignore_paths = ["generated/"]
+
+[tool.determystic.validators.custom]
+name = "custom"
+validator_path = ".determystic/validations/custom.determystic"
+"""
+            )
+
+            config = ProjectConfigManager.load_from_config_path(
+                config_file,
+                project_root=member_root,
+                extra_ignore_paths=["vendor/"],
+            )
+
+            assert config.config_path == config_file.resolve()
+            assert config.config_root == workspace_root.resolve()
+            assert config.project_root == member_root.resolve()
+            assert config.ignore_paths == ["generated/", "vendor/"]
+            assert config.isolation_paths == ["vendor/"]
+            assert config.resolve_project_path(
+                ".determystic/validations/custom.determystic"
+            ) == (
+                workspace_root.resolve()
+                / ".determystic"
+                / "validations"
+                / "custom.determystic"
+            )
+
     def test_load_from_pyproject_accepts_ignored_paths_alias(self) -> None:
         """The older descriptive ignored_paths key maps to ignore_paths."""
         config = ProjectConfigManager.model_validate(

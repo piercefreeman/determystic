@@ -6,7 +6,7 @@ from typing import Any, ClassVar, Literal, TypeVar
 from pathlib import Path
 
 import tomli_w
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator
 from determystic.configs.base import BaseConfig
 from determystic.io import detect_git_root, detect_pyproject_path
 
@@ -72,6 +72,9 @@ class ProjectConfigManager(BaseConfig):
     """Configuration for a determystic project stored in pyproject.toml."""
 
     TOOL_SECTION: ClassVar[str] = "determystic"
+    _config_path: Path | None = PrivateAttr(default=None)
+    _project_root: Path | None = PrivateAttr(default=None)
+    _isolation_paths: list[str] = PrivateAttr(default_factory=list)
     
     version: str = Field(default="1.0", description="Configuration version")
     project_name: str | None = Field(default=None, description="Name of the project")
@@ -208,6 +211,18 @@ class ProjectConfigManager(BaseConfig):
     def load_from_disk(cls) -> "ProjectConfigManager":
         """Load determystic configuration from [tool.determystic]."""
         config_path = cls.get_config_path()
+        return cls.load_from_config_path(config_path)
+
+    @classmethod
+    def load_from_config_path(
+        cls,
+        config_path: Path,
+        *,
+        project_root: Path | None = None,
+        extra_ignore_paths: list[str] | tuple[str, ...] | None = None,
+    ) -> "ProjectConfigManager":
+        """Load determystic configuration from an explicit pyproject path."""
+        config_path = config_path.resolve()
         config_data: dict[str, Any] = {}
 
         if config_path.exists():
@@ -216,11 +231,28 @@ class ProjectConfigManager(BaseConfig):
             tool_data = pyproject_data.get("tool", {})
             config_data = tool_data.get(cls.TOOL_SECTION, {})
 
-        return cls.model_validate(config_data)
+        config = cls.model_validate(config_data)
+        config._config_path = config_path
+        config._project_root = (
+            project_root.resolve()
+            if project_root is not None
+            else config_path.parent
+        )
+        if extra_ignore_paths:
+            config._isolation_paths = [
+                ignore_path
+                for ignore_path in extra_ignore_paths
+                if ignore_path.strip()
+            ]
+            config.ignore_paths = [
+                *config.ignore_paths,
+                *config._isolation_paths,
+            ]
+        return config
 
     def save_to_disk(self) -> None:
         """Save determystic configuration under [tool.determystic]."""
-        config_path = self.__class__.get_config_path()
+        config_path = self.config_path
         config_path.parent.mkdir(parents=True, exist_ok=True)
 
         pyproject_data: dict[str, Any] = {}
@@ -261,8 +293,7 @@ class ProjectConfigManager(BaseConfig):
         Returns:
             The created ValidatorFile instance
         """
-        project_root = self.project_root
-        config_root = project_root / ".determystic"
+        config_root = self.config_root / ".determystic"
         
         # We don't want to bundle .py files since these get picked up by the static analysis validators
         validator_path = config_root / "validations" / f"{name}.determystic"
@@ -277,8 +308,8 @@ class ProjectConfigManager(BaseConfig):
 
         validator_file = ValidatorFile(
             name=name,
-            validator_path=str(validator_path.relative_to(project_root)),
-            test_path=str(test_path.relative_to(project_root)),
+            validator_path=str(validator_path.relative_to(self.config_root)),
+            test_path=str(test_path.relative_to(self.config_root)),
             description=description
         )
         
@@ -307,7 +338,7 @@ class ProjectConfigManager(BaseConfig):
         path = Path(path)
         if path.is_absolute():
             return path
-        return self.project_root / path
+        return self.config_root / path
 
     def get_validator_config(
         self,
@@ -320,9 +351,28 @@ class ProjectConfigManager(BaseConfig):
     @property
     def project_root(self) -> Path:
         """
-        Get the project root.
+        Get the root being validated.
         """
-        return self.get_config_path().parent
+        if self._project_root is not None:
+            return self._project_root
+        return self.config_root
+
+    @property
+    def config_path(self) -> Path:
+        """Get the pyproject.toml path that supplied this configuration."""
+        if self._config_path is not None:
+            return self._config_path
+        return self.get_config_path()
+
+    @property
+    def config_root(self) -> Path:
+        """Get the directory containing the pyproject.toml configuration."""
+        return self.config_path.parent
+
+    @property
+    def isolation_paths(self) -> list[str]:
+        """Get project-relative paths that isolate nested validation scopes."""
+        return self._isolation_paths
 
     def _get_validator_config_data(self, name: str) -> dict[str, Any]:
         """Return raw per-validator configuration for a validator name."""
