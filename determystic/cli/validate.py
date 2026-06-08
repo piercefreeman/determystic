@@ -2,6 +2,7 @@
 
 import asyncio
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 import click
@@ -13,10 +14,21 @@ from rich.spinner import Spinner
 from rich.table import Table
 from rich.text import Text
 
-from determystic.cli.common import get_active_validators, load_project_config
-from determystic.io import detect_pyproject_path
+from determystic.cli.common import get_active_validators
+from determystic.configs.project import ProjectConfigManager
+from determystic.project_discovery import ValidationTarget, discover_validation_targets
+from determystic.validators.base import BaseValidator, ValidationResult
 
 console = Console()
+
+
+@dataclass(frozen=True)
+class ValidationJob:
+    """One validator running against one project scope."""
+
+    key: str
+    validator: BaseValidator
+    target_label: str
 
 
 @click.command()
@@ -29,21 +41,30 @@ console = Console()
 def validate_command(path: Path | None, verbose: bool):
     """Run validation on a Python project."""
     # Note: This command doesn't require API configuration
-    
-    # Use path detection logic to determine the target path
-    target_path = detect_pyproject_path(path or Path.cwd())
-    
+
+    target_path = (path or Path.cwd()).resolve()
+
     # Ensure the target path exists
-    if not target_path or not target_path.exists():
+    if not target_path.exists():
         console.print(f"[red]Error: Path '{target_path}' does not exist.[/red]")
         sys.exit(1)
-    
-    # At this point target_path is guaranteed to exist
-    assert target_path is not None
-    asyncio.run(_run_validation(target_path, verbose))
+
+    targets = discover_validation_targets(target_path)
+    if not targets:
+        console.print(
+            f"[red]Error: No pyproject.toml found for '{target_path}'.[/red]"
+        )
+        sys.exit(1)
+
+    asyncio.run(_run_validation_targets(targets, verbose, target_path))
 
 
-def _create_status_table(validators: list, results: dict) -> Table:
+def _create_status_table(
+    jobs: list[ValidationJob],
+    results: dict[str, ValidationResult],
+    *,
+    include_scope: bool,
+) -> Table:
     """Create a status table showing validation progress."""
     table = Table(
         show_header=True,
@@ -53,16 +74,18 @@ def _create_status_table(validators: list, results: dict) -> Table:
         title_style="bold",
         expand=False,
     )
-    
+
+    if include_scope:
+        table.add_column("Scope", style="magenta", width=22)
     table.add_column("Validator", style="cyan", width=20)
     table.add_column("Status", width=15)
     table.add_column("Result", width=60)
-    
-    for validator in validators:
-        name = validator.display_name
-        
-        if validator.name in results:
-            result = results[validator.name]
+
+    for job in jobs:
+        name = job.validator.display_name
+
+        if job.key in results:
+            result = results[job.key]
             if result.success:
                 status = Text("✓ Passed", style="green")
                 output = Text("No issues found", style="dim green")
@@ -77,57 +100,97 @@ def _create_status_table(validators: list, results: dict) -> Table:
         else:
             status = Spinner("dots", style="yellow")
             output = Text("Running...", style="dim")
-        
-        table.add_row(name, status, output)
-    
+
+        row = [name, status, output]
+        if include_scope:
+            row.insert(0, job.target_label)
+        table.add_row(*row)
+
     return table
 
 
-async def _run_validation(path: Path, verbose: bool):
+async def _run_validation_targets(
+    targets: list[ValidationTarget],
+    verbose: bool,
+    requested_path: Path,
+) -> None:
     """Run the validation process."""
-    console.print(Panel.fit(
-        f"[bold cyan]Validating:[/bold cyan] {path.absolute()}",
-        border_style="cyan"
-    ))
-    
-    # Load project configuration and get active validators
-    project_config = load_project_config(path)
-    display_validators = get_active_validators(project_config)
-    
+    if not targets:
+        console.print("[yellow]No project scopes found to validate.[/yellow]")
+        return
+
+    include_scope = len(targets) > 1
+    if include_scope:
+        scope_lines = "\n".join(
+            f"  • {_target_label(target, requested_path)}"
+            for target in targets
+        )
+        console.print(
+            Panel.fit(
+                (
+                    f"[bold cyan]Validating {len(targets)} project scopes under:[/bold cyan] "
+                    f"{requested_path.absolute()}\n{scope_lines}"
+                ),
+                border_style="cyan",
+            )
+        )
+    else:
+        console.print(
+            Panel.fit(
+                f"[bold cyan]Validating:[/bold cyan] {targets[0].project_root.absolute()}",
+                border_style="cyan",
+            )
+        )
+
+    jobs = _create_validation_jobs(targets, requested_path)
+
     # Check if we have any validators to run
-    if not display_validators:
+    if not jobs:
         console.print("[yellow]No validators found to run.[/yellow]")
         return
-    
-    results = {}
-    
+
+    results: dict[str, ValidationResult] = {}
+
     # Create live display
-    with Live(_create_status_table(display_validators, results), console=console, refresh_per_second=4) as live:
+    with Live(
+        _create_status_table(jobs, results, include_scope=include_scope),
+        console=console,
+        refresh_per_second=4,
+    ) as live:
         # Run validation in parallel
         tasks = []
-        for validator in display_validators:
-            async def run_and_store(v):
-                result = await v.validate()
-                results[v.name] = result
+        for job in jobs:
+            async def run_and_store(current_job):
+                result = await current_job.validator.validate()
+                results[current_job.key] = result
                 # Update the live display immediately when a validator completes
-                live.update(_create_status_table(display_validators, results))
-                return v.name, result
-            tasks.append(run_and_store(validator))
-        
+                live.update(
+                    _create_status_table(
+                        jobs,
+                        results,
+                        include_scope=include_scope,
+                    )
+                )
+                return current_job.key, result
+
+            tasks.append(run_and_store(job))
+
         # Wait for all validations to complete
         await asyncio.gather(*tasks)
-        
+
         # Final update to ensure all results are displayed
-        live.update(_create_status_table(display_validators, results))
-        
+        live.update(
+            _create_status_table(jobs, results, include_scope=include_scope)
+        )
+
         # Give a brief moment for users to see the final status
         await asyncio.sleep(0.5)
-    
+
     # Display final results
     console.print()  # Add spacing
-    
+
     all_passed = all(r.success for r in results.values())
-    
+
     if all_passed:
         console.print(Panel(
             "[bold green]✓ All validations passed![/bold green]",
@@ -140,14 +203,17 @@ async def _run_validation(path: Path, verbose: bool):
             border_style="red",
             box=box.ROUNDED
         ))
-    
+
     # Show detailed output if verbose or if there were failures
     if verbose or not all_passed:
         console.print("\n[bold]Detailed Results:[/bold]\n")
-        
-        for name, result in results.items():
-            validator_display = name.replace("_", " ").title()
-            
+
+        for job in jobs:
+            result = results[job.key]
+            validator_display = job.validator.display_name
+            if include_scope:
+                validator_display = f"{job.target_label} / {validator_display}"
+
             if result.success:
                 if verbose:  # Only show passed validators in verbose mode
                     console.print(f"[green]✓[/green] [bold]{validator_display}[/bold]")
@@ -161,7 +227,43 @@ async def _run_validation(path: Path, verbose: bool):
                     for line in result.output.strip().split("\n"):
                         console.print(f"  {line}")
                 console.print()
-    
+
     # Set exit code based on results
     if not all_passed:
         sys.exit(1)
+
+
+def _create_validation_jobs(
+    targets: list[ValidationTarget],
+    requested_path: Path,
+) -> list[ValidationJob]:
+    jobs: list[ValidationJob] = []
+    for target in targets:
+        project_config = ProjectConfigManager.load_from_config_path(
+            target.config_path,
+            project_root=target.project_root,
+            extra_ignore_paths=target.extra_ignore_paths,
+        )
+        validators = get_active_validators(project_config)
+        target_label = _target_label(target, requested_path)
+        for validator_index, validator in enumerate(validators):
+            jobs.append(
+                ValidationJob(
+                    key=f"{len(jobs)}:{target_label}:{validator_index}:{validator.name}",
+                    validator=validator,
+                    target_label=target_label,
+                )
+            )
+    return jobs
+
+
+def _target_label(target: ValidationTarget, requested_path: Path) -> str:
+    base_path = requested_path if requested_path.is_dir() else requested_path.parent
+    try:
+        relative_path = target.project_root.relative_to(base_path.resolve())
+    except ValueError:
+        return str(target.project_root)
+
+    if relative_path == Path("."):
+        return "."
+    return relative_path.as_posix()
