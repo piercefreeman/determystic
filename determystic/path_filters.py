@@ -14,12 +14,14 @@ def iter_python_files(
     *,
     include_tests: bool = True,
     include_ignored: bool = False,
+    isolation_paths: list[str] | tuple[str, ...] | None = None,
 ) -> list[Path]:
     """Return Python files that are visible to validators."""
     return [
         py_file
         for py_file in project_root.rglob("*.py")
         if _is_relevant_python_file(py_file)
+        and not is_ignored_path(py_file, project_root, isolation_paths)
         and (
             include_ignored
             or not is_ignored_path(py_file, project_root, ignore_paths)

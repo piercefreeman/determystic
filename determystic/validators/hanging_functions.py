@@ -298,9 +298,11 @@ class HangingFunctionsValidator(BaseValidator):
         name: str = "hanging_functions",
         path: Path | None = None,
         ignore_paths: list[str] | None = None,
+        isolation_paths: list[str] | None = None,
     ) -> None:
         super().__init__(name=name, path=path)
         self.ignore_paths = ignore_paths or []
+        self.isolation_paths = isolation_paths or []
 
     @classmethod
     def create_validators(
@@ -311,6 +313,7 @@ class HangingFunctionsValidator(BaseValidator):
             cls(
                 path=config_manager.project_root,
                 ignore_paths=config_manager.ignore_paths,
+                isolation_paths=config_manager.isolation_paths,
             )
         ]
 
@@ -321,6 +324,7 @@ class HangingFunctionsValidator(BaseValidator):
             self.path,
             self.ignore_paths,
             include_tests=False,
+            isolation_paths=self.isolation_paths,
         )
 
         if not reportable_python_files:
@@ -399,6 +403,7 @@ class HangingFunctionsValidator(BaseValidator):
             self.ignore_paths,
             include_tests=False,
             include_ignored=True,
+            isolation_paths=self.isolation_paths,
         )
 
     def _get_script_entrypoints(self, path: Path) -> set[str]:

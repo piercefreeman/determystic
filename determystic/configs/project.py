@@ -74,6 +74,7 @@ class ProjectConfigManager(BaseConfig):
     TOOL_SECTION: ClassVar[str] = "determystic"
     _config_path: Path | None = PrivateAttr(default=None)
     _project_root: Path | None = PrivateAttr(default=None)
+    _isolation_paths: list[str] = PrivateAttr(default_factory=list)
     
     version: str = Field(default="1.0", description="Configuration version")
     project_name: str | None = Field(default=None, description="Name of the project")
@@ -238,13 +239,14 @@ class ProjectConfigManager(BaseConfig):
             else config_path.parent
         )
         if extra_ignore_paths:
+            config._isolation_paths = [
+                ignore_path
+                for ignore_path in extra_ignore_paths
+                if ignore_path.strip()
+            ]
             config.ignore_paths = [
                 *config.ignore_paths,
-                *[
-                    ignore_path
-                    for ignore_path in extra_ignore_paths
-                    if ignore_path.strip()
-                ],
+                *config._isolation_paths,
             ]
         return config
 
@@ -366,6 +368,11 @@ class ProjectConfigManager(BaseConfig):
     def config_root(self) -> Path:
         """Get the directory containing the pyproject.toml configuration."""
         return self.config_path.parent
+
+    @property
+    def isolation_paths(self) -> list[str]:
+        """Get project-relative paths that isolate nested validation scopes."""
+        return self._isolation_paths
 
     def _get_validator_config_data(self, name: str) -> dict[str, Any]:
         """Return raw per-validator configuration for a validator name."""

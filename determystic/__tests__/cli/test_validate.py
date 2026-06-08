@@ -1,7 +1,18 @@
 """Tests for the validate CLI orchestration helpers."""
 
-from determystic.cli.validate import _create_validation_jobs, _target_label
+from types import SimpleNamespace
+from typing import cast
+
+from rich.console import Console
+
+from determystic.cli.validate import (
+    ValidationJob,
+    _create_status_table,
+    _create_validation_jobs,
+    _target_label,
+)
 from determystic.project_discovery import ValidationTarget
+from determystic.validators.base import BaseValidator
 
 
 def test_create_validation_jobs_scopes_inherited_config_to_target_root(tmp_path) -> None:
@@ -35,6 +46,7 @@ ignore_paths = ["generated/"]
         "generated/",
         "nested-member",
     ]
+    assert getattr(jobs[0].validator, "isolation_paths") == ["nested-member"]
 
 
 def test_create_validation_jobs_uses_unique_keys_for_duplicate_validator_names(tmp_path) -> None:
@@ -58,6 +70,37 @@ enabled = ["static_analysis"]
         "static_analysis",
     ]
     assert len({job.key for job in jobs}) == 2
+
+
+def test_status_rendering_uses_separate_tables_for_each_scope() -> None:
+    """Multi-project status output is grouped by scope instead of repeating a column."""
+    validator = cast(
+        BaseValidator,
+        SimpleNamespace(
+            name="future_annotations",
+            display_name="Future Annotations",
+        ),
+    )
+    jobs = [
+        ValidationJob(
+            key="root:future",
+            validator=validator,
+            target_label=".",
+        ),
+        ValidationJob(
+            key="poc:future",
+            validator=validator,
+            target_label="captcha-solver-poc",
+        ),
+    ]
+    console = Console(record=True, width=120, color_system=None)
+
+    console.print(_create_status_table(jobs, {}, include_scope=True))
+    output = console.export_text()
+
+    assert "Scope: ." in output
+    assert "Scope: captcha-solver-poc" in output
+    assert "│ Scope " not in output
 
 
 # determystic: tested-exceptions[determystic.cli.validate._target_label: ValueError]

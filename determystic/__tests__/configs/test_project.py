@@ -371,6 +371,7 @@ validator_path = ".determystic/validations/custom.determystic"
             assert config.config_root == workspace_root.resolve()
             assert config.project_root == member_root.resolve()
             assert config.ignore_paths == ["generated/", "vendor/"]
+            assert config.isolation_paths == ["vendor/"]
             assert config.resolve_project_path(
                 ".determystic/validations/custom.determystic"
             ) == (

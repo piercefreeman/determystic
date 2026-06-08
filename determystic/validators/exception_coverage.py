@@ -175,9 +175,11 @@ class ExceptionCoverageValidator(BaseValidator):
         name: str = "exception_coverage",
         path: Path | None = None,
         ignore_paths: list[str] | None = None,
+        isolation_paths: list[str] | None = None,
     ) -> None:
         super().__init__(name=name, path=path)
         self.ignore_paths = ignore_paths or []
+        self.isolation_paths = isolation_paths or []
 
     @classmethod
     def create_validators(
@@ -188,6 +190,7 @@ class ExceptionCoverageValidator(BaseValidator):
             cls(
                 path=config_manager.project_root,
                 ignore_paths=config_manager.ignore_paths,
+                isolation_paths=config_manager.isolation_paths,
             )
         ]
 
@@ -212,7 +215,12 @@ class ExceptionCoverageValidator(BaseValidator):
         return ValidationResult(success=False, output="\n".join(issues))
 
     def _get_production_python_files(self, path: Path) -> list[Path]:
-        return iter_python_files(path, self.ignore_paths, include_tests=False)
+        return iter_python_files(
+            path,
+            self.ignore_paths,
+            include_tests=False,
+            isolation_paths=self.isolation_paths,
+        )
 
     def _get_test_python_files(self, path: Path) -> list[Path]:
         return [
@@ -221,6 +229,7 @@ class ExceptionCoverageValidator(BaseValidator):
                 path,
                 self.ignore_paths,
                 include_ignored=True,
+                isolation_paths=self.isolation_paths,
             )
             if is_test_file(py_file)
         ]

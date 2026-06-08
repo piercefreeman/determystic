@@ -64,3 +64,26 @@ def test_iter_python_files_can_include_ignored_reference_sources(tmp_path) -> No
     }
 
     assert files == {"generated/client.py", "service.py"}
+
+
+def test_iter_python_files_always_excludes_isolated_project_paths(tmp_path) -> None:
+    """Nested validation scopes are excluded even when ignored files are included."""
+    (tmp_path / "service.py").write_text("value = 1")
+    generated_dir = tmp_path / "generated"
+    generated_dir.mkdir()
+    (generated_dir / "client.py").write_text("value = 1")
+    nested_project_dir = tmp_path / "packages" / "worker"
+    nested_project_dir.mkdir(parents=True)
+    (nested_project_dir / "worker.py").write_text("value = 1")
+
+    files = {
+        file.relative_to(tmp_path).as_posix()
+        for file in iter_python_files(
+            tmp_path,
+            ["generated/"],
+            include_ignored=True,
+            isolation_paths=["packages/worker"],
+        )
+    }
+
+    assert files == {"generated/client.py", "service.py"}

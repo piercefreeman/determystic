@@ -111,7 +111,7 @@ Generated custom validator metadata is also tracked in this section; the generat
 
 When `validate` runs against a directory with `[tool.uv.workspace]`, Determystic validates the workspace root and each included member as isolated project scopes. A root `[tool.determystic]` config is inherited by workspace members unless a member defines its own `[tool.determystic]` section.
 
-Repos without uv workspace metadata but with multiple nested `pyproject.toml` files are handled similarly: each project is validated independently, and parent scopes ignore nested project directories so project-wide validators do not analyze subprojects as one flattened codebase.
+Repos without uv workspace metadata but with multiple nested Python project markers are handled similarly: each project is validated independently, and parent scopes ignore nested project directories so project-wide validators do not analyze subprojects as one flattened codebase. Determystic treats `pyproject.toml`, `setup.py`, and `setup.cfg` as Python project markers.
 
 `ignore_paths` entries are relative to the project scope being validated. Generated custom validator files remain relative to the `pyproject.toml` that owns the `[tool.determystic]` config.
 

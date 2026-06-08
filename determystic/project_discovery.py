@@ -28,6 +28,7 @@ SKIPPED_PROJECT_DIR_NAMES = {
     "node_modules",
     "venv",
 }
+PROJECT_MARKER_FILENAMES = {"pyproject.toml", "setup.py", "setup.cfg"}
 
 
 @dataclass(frozen=True)
@@ -54,17 +55,26 @@ def discover_validation_targets(start_path: Path) -> list[ValidationTarget]:
 
     root_pyproject = start / "pyproject.toml"
     if root_pyproject.exists():
+        inherited_config_path = (
+            root_pyproject if _has_determystic_config(root_pyproject) else None
+        )
         workspace_targets = _discover_uv_workspace_targets(start, root_pyproject)
-        if workspace_targets:
-            return workspace_targets
-
-        pyproject_paths = _find_pyproject_paths(start)
-        if len(pyproject_paths) > 1:
-            inherited_config_path = (
-                root_pyproject if _has_determystic_config(root_pyproject) else None
-            )
-            return _targets_from_pyprojects(
-                pyproject_paths,
+        workspace_exclude = _uv_workspace_exclude_patterns(root_pyproject)
+        project_roots = _find_project_roots(start)
+        if workspace_exclude:
+            project_roots = [
+                project_root
+                for project_root in project_roots
+                if not _is_excluded_workspace_member(
+                    project_root,
+                    start,
+                    workspace_exclude,
+                )
+            ]
+        if workspace_targets or len(project_roots) > 1:
+            workspace_roots = [target.project_root for target in workspace_targets]
+            return _targets_from_project_roots(
+                [*workspace_roots, *project_roots],
                 inherited_config_path=inherited_config_path,
             )
 
@@ -75,9 +85,9 @@ def discover_validation_targets(start_path: Path) -> list[ValidationTarget]:
             )
         ]
 
-    child_pyproject_paths = _find_pyproject_paths(start)
-    if child_pyproject_paths:
-        return _targets_from_pyprojects(child_pyproject_paths)
+    child_project_roots = _find_project_roots(start)
+    if child_project_roots:
+        return _targets_from_project_roots(child_project_roots)
 
     detected_root = detect_pyproject_path(start)
     if detected_root is None:
@@ -110,7 +120,7 @@ def _discover_uv_workspace_targets(
     member_roots = [
         path
         for member_pattern in members
-        for path in _glob_project_dirs(workspace_root, member_pattern)
+        for path in _glob_workspace_member_dirs(workspace_root, member_pattern)
         if not _is_excluded_workspace_member(path, workspace_root, exclude)
     ]
     return _targets_from_project_roots(
@@ -118,17 +128,6 @@ def _discover_uv_workspace_targets(
         inherited_config_path=(
             pyproject_path if _has_determystic_config(pyproject_path) else None
         ),
-    )
-
-
-def _targets_from_pyprojects(
-    pyproject_paths: list[Path],
-    *,
-    inherited_config_path: Path | None = None,
-) -> list[ValidationTarget]:
-    return _targets_from_project_roots(
-        [pyproject_path.parent for pyproject_path in pyproject_paths],
-        inherited_config_path=inherited_config_path,
     )
 
 
@@ -233,26 +232,34 @@ def _uv_workspace_includes_project(
     return any(
         member_root == resolved_project_root
         for member_pattern in members
-        for member_root in _glob_project_dirs(workspace_root, member_pattern)
+        for member_root in _glob_workspace_member_dirs(workspace_root, member_pattern)
     )
 
 
-def _find_pyproject_paths(root: Path) -> list[Path]:
-    pyproject_paths: list[Path] = []
-    for path in root.rglob("pyproject.toml"):
-        if _has_skipped_part(path.relative_to(root)):
-            continue
-        pyproject_paths.append(path.resolve())
-    return sorted(pyproject_paths)
+def _uv_workspace_exclude_patterns(pyproject_path: Path) -> list[str]:
+    data = _load_pyproject(pyproject_path)
+    workspace = data.get("tool", {}).get("uv", {}).get("workspace")
+    if not isinstance(workspace, dict):
+        return []
+    return _string_list(workspace.get("exclude"))
 
 
-def _glob_project_dirs(root: Path, pattern: str) -> list[Path]:
+def _find_project_roots(root: Path) -> list[Path]:
+    project_roots: set[Path] = set()
+    for marker_filename in PROJECT_MARKER_FILENAMES:
+        for path in root.rglob(marker_filename):
+            if _has_skipped_part(path.relative_to(root)):
+                continue
+            project_roots.add(path.parent.resolve())
+    return sorted(project_roots)
+
+
+def _glob_workspace_member_dirs(root: Path, pattern: str) -> list[Path]:
     return sorted(
         path.resolve()
         for path in root.glob(pattern)
         if path.is_dir()
         and not _has_skipped_part(path.relative_to(root))
-        and (path / "pyproject.toml").exists()
     )
 
 

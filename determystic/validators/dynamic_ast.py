@@ -23,11 +23,13 @@ class DynamicASTValidator(BaseValidator):
         validator_path: Path,
         path: Path | None = None,
         ignore_paths: list[str] | None = None,
+        isolation_paths: list[str] | None = None,
         config_data: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(name=name, path=path)
         self.validator_path = validator_path
         self.ignore_paths = ignore_paths or []
+        self.isolation_paths = isolation_paths or []
         self.config_data = config_data or {}
         self.traverser_class = self._load_validator_module(validator_path)
         self.traverser_config: BaseModel | None = None
@@ -52,6 +54,7 @@ class DynamicASTValidator(BaseValidator):
                 validator_path=validator_path,
                 path=config_manager.project_root,
                 ignore_paths=config_manager.ignore_paths,
+                isolation_paths=config_manager.isolation_paths,
                 config_data=config_manager._get_validator_config_data(validator_file.name),
             )
             
@@ -76,7 +79,11 @@ class DynamicASTValidator(BaseValidator):
             )
         
         # Find all Python files
-        python_files = iter_python_files(self.path, self.ignore_paths)
+        python_files = iter_python_files(
+            self.path,
+            self.ignore_paths,
+            isolation_paths=self.isolation_paths,
+        )
         
         if not python_files:
             return ValidationResult(success=True, output="No Python files found")

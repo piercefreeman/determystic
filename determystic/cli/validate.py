@@ -7,7 +7,7 @@ from pathlib import Path
 
 import click
 from rich import box
-from rich.console import Console
+from rich.console import Console, Group, RenderableType
 from rich.live import Live
 from rich.panel import Panel
 from rich.spinner import Spinner
@@ -64,22 +64,48 @@ def _create_status_table(
     results: dict[str, ValidationResult],
     *,
     include_scope: bool,
-) -> Table:
+) -> Table | Group:
     """Create a status table showing validation progress."""
+    if include_scope:
+        renderables: list[RenderableType] = [Text("Validation Status", style="bold")]
+        for scope, scope_jobs in _jobs_by_scope(jobs).items():
+            if len(renderables) > 1:
+                renderables.append(Text(""))
+            renderables.append(
+                _create_scope_status_table(
+                    scope_jobs,
+                    results,
+                    title=f"Scope: {scope}",
+                )
+            )
+        return Group(*renderables)
+
+    return _create_scope_status_table(
+        jobs,
+        results,
+        title="Validation Status",
+    )
+
+
+def _create_scope_status_table(
+    jobs: list[ValidationJob],
+    results: dict[str, ValidationResult],
+    *,
+    title: str,
+) -> Table:
+    """Create a status table for one validation scope."""
     table = Table(
         show_header=True,
         header_style="bold cyan",
         box=box.ROUNDED,
-        title="Validation Status",
+        title=title,
         title_style="bold",
         expand=False,
     )
 
-    if include_scope:
-        table.add_column("Scope", style="magenta", width=22)
-    table.add_column("Validator", style="cyan", width=20)
-    table.add_column("Status", width=15)
-    table.add_column("Result", width=60)
+    table.add_column("Validator", style="cyan", width=20, no_wrap=True)
+    table.add_column("Status", width=6, min_width=6, no_wrap=True)
+    table.add_column("Result", ratio=1)
 
     for job in jobs:
         name = job.validator.display_name
@@ -87,10 +113,10 @@ def _create_status_table(
         if job.key in results:
             result = results[job.key]
             if result.success:
-                status = Text("✓ Passed", style="green")
+                status = Text("✓", style="green")
                 output = Text("No issues found", style="dim green")
             else:
-                status = Text("✗ Failed", style="red")
+                status = Text("✗", style="red")
                 # Get first line of output for summary
                 lines = result.output.strip().split("\n")
                 if lines and lines[0]:
@@ -101,12 +127,16 @@ def _create_status_table(
             status = Spinner("dots", style="yellow")
             output = Text("Running...", style="dim")
 
-        row = [name, status, output]
-        if include_scope:
-            row.insert(0, job.target_label)
-        table.add_row(*row)
+        table.add_row(name, status, output)
 
     return table
+
+
+def _jobs_by_scope(jobs: list[ValidationJob]) -> dict[str, list[ValidationJob]]:
+    grouped_jobs: dict[str, list[ValidationJob]] = {}
+    for job in jobs:
+        grouped_jobs.setdefault(job.target_label, []).append(job)
+    return grouped_jobs
 
 
 async def _run_validation_targets(
