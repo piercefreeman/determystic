@@ -105,7 +105,7 @@ Determystic includes bundled validators that can replace parts of a conventional
 ## Configuration
 
 You can customize which validators run in your project by adding a `[tool.determystic]` section to your project `pyproject.toml`. The configuration supports enabling bundled validators, excluding specific validators from running, and ignoring generated or vendored paths.
-Generated custom validator metadata is also tracked in this section; the generated validator source files still live under `.determystic/`.
+Generated custom validators are discovered automatically from `.determystic/validations/*.determystic`; they do not need to be listed in `pyproject.toml`.
 
 ### Workspaces And Multi-Project Repos
 
@@ -113,7 +113,7 @@ When `validate` runs against a directory with `[tool.uv.workspace]`, Determystic
 
 Repos without uv workspace metadata but with multiple nested Python project markers are handled similarly: each project is validated independently, and parent scopes ignore nested project directories so project-wide validators do not analyze subprojects as one flattened codebase. Determystic treats `pyproject.toml`, `setup.py`, and `setup.cfg` as Python project markers.
 
-`ignore_paths` entries are relative to the project scope being validated. Generated custom validator files remain relative to the `pyproject.toml` that owns the `[tool.determystic]` config.
+`ignore_paths` entries are relative to the project scope being validated. Generated custom validator files are discovered under the `.determystic/validations` directory next to the `pyproject.toml` that owns the `[tool.determystic]` config.
 
 ### Enabling Bundled Validators
 
@@ -152,10 +152,6 @@ Validators can declare an optional Pydantic `BaseModel` config schema. Project c
 
 ```toml
 # pyproject.toml
-[tool.determystic.validators.my_custom_validator]
-name = "my_custom_validator"
-validator_path = ".determystic/validations/my_custom_validator.determystic"
-
 [tool.determystic.validators.my_custom_validator.config]
 forbidden_name = "debug_only"
 ```

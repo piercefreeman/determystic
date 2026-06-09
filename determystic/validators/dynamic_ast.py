@@ -41,11 +41,11 @@ class DynamicASTValidator(BaseValidator):
         """Factory function that creates DynamicASTValidator instances for each determystic validator."""
         validators = []
         
-        if not config_manager or not config_manager.validators:
+        if not config_manager:
             return validators
 
         # Load each validator file as a separate validator instance
-        for validator_file in config_manager.validators.values():
+        for validator_file in config_manager.get_custom_validators().values():
             validator_path = config_manager.resolve_project_path(validator_file.validator_path)
             
             # Create a DynamicASTValidator for this specific validator

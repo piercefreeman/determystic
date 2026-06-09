@@ -1,7 +1,6 @@
 """Project configuration management for determystic validators."""
 
 import tomllib
-from datetime import datetime
 from typing import Any, ClassVar, Literal, TypeVar
 from pathlib import Path
 
@@ -27,7 +26,6 @@ class ValidatorFile(BaseModel):
     name: str = Field(description="Name of the validator file (without extension)")
     validator_path: str = Field(description="Relative path to the validator file")
     test_path: str | None = Field(default=None, description="Relative path to the test file")
-    created_at: datetime = Field(default_factory=datetime.now)
     description: str | None = Field(default=None, description="Description of what this validator checks")
     config: dict[str, Any] = Field(
         default_factory=dict,
@@ -78,8 +76,6 @@ class ProjectConfigManager(BaseConfig):
     
     version: str = Field(default="1.0", description="Configuration version")
     project_name: str | None = Field(default=None, description="Name of the project")
-    created_at: datetime = Field(default_factory=datetime.now)
-    updated_at: datetime = Field(default_factory=datetime.now)
 
     exclude: list[str] = Field(default_factory=list, description="List of validators to exclude from validation")
     enabled: list[str] = Field(
@@ -159,6 +155,7 @@ class ProjectConfigManager(BaseConfig):
                 for key, value in entry.items()
                 if key in VALIDATOR_METADATA_FIELDS
             }
+            custom_validators[validator_name].setdefault("name", validator_name)
             if combined_config:
                 custom_validators[validator_name]["config"] = combined_config
 
@@ -264,9 +261,17 @@ class ProjectConfigManager(BaseConfig):
         determystic_data = self.model_dump(
             mode="json",
             exclude_none=True,
-            exclude={"validator_configs"},
+            exclude={"validator_configs", "validators"},
+            exclude_defaults=True,
         )
-        validators_data = dict(determystic_data.get("validators", {}))
+        validators_data: dict[str, dict[str, Any]] = {}
+        for validator_name, validator_file in self.validators.items():
+            validator_data = self._validator_metadata_to_save(validator_file)
+            if validator_file.config:
+                validator_data["config"] = validator_file.config
+            if validator_data:
+                validators_data[validator_name] = validator_data
+
         for validator_name, validator_config in self.validator_configs.items():
             if not validator_config:
                 continue
@@ -314,7 +319,6 @@ class ProjectConfigManager(BaseConfig):
         )
         
         self.validators[name] = validator_file
-        self.updated_at = datetime.now()
         
         return validator_file
     
@@ -329,7 +333,6 @@ class ProjectConfigManager(BaseConfig):
         """
         if name in self.validators:
             del self.validators[name]
-            self.updated_at = datetime.now()
             return True
         return False
 
@@ -374,6 +377,37 @@ class ProjectConfigManager(BaseConfig):
         """Get project-relative paths that isolate nested validation scopes."""
         return self._isolation_paths
 
+    def get_custom_validators(self) -> dict[str, ValidatorFile]:
+        """Return custom validators from legacy config metadata and discovered files."""
+        validators = dict(self.validators)
+
+        validations_dir = self.config_root / ".determystic" / "validations"
+        if not validations_dir.is_dir():
+            return validators
+
+        for validator_path in sorted(validations_dir.glob("*.determystic")):
+            validator_name = validator_path.stem
+            test_path = self._default_test_path(validator_name)
+            discovered = ValidatorFile(
+                name=validator_name,
+                validator_path=self._relative_project_path(validator_path),
+                test_path=(
+                    self._relative_project_path(test_path)
+                    if test_path.exists()
+                    else None
+                ),
+            )
+
+            existing = validators.get(validator_name)
+            if existing is None:
+                validators[validator_name] = discovered
+            elif existing.test_path is None and discovered.test_path is not None:
+                validators[validator_name] = existing.model_copy(
+                    update={"test_path": discovered.test_path}
+                )
+
+        return validators
+
     def _get_validator_config_data(self, name: str) -> dict[str, Any]:
         """Return raw per-validator configuration for a validator name."""
         config_data = dict(self.validator_configs.get(name, {}))
@@ -381,3 +415,27 @@ class ProjectConfigManager(BaseConfig):
         if validator_file is not None:
             config_data.update(validator_file.config)
         return config_data
+
+    def _validator_metadata_to_save(self, validator_file: ValidatorFile) -> dict[str, Any]:
+        """Return explicit metadata only when the validator uses nonstandard paths."""
+        validator_data: dict[str, Any] = {}
+        default_validator_path = self._default_validator_path(validator_file.name)
+        default_test_path = self._default_test_path(validator_file.name)
+
+        if validator_file.validator_path != self._relative_project_path(default_validator_path):
+            validator_data["validator_path"] = validator_file.validator_path
+        if (
+            validator_file.test_path is not None
+            and validator_file.test_path != self._relative_project_path(default_test_path)
+        ):
+            validator_data["test_path"] = validator_file.test_path
+        return validator_data
+
+    def _default_validator_path(self, name: str) -> Path:
+        return self.config_root / ".determystic" / "validations" / f"{name}.determystic"
+
+    def _default_test_path(self, name: str) -> Path:
+        return self.config_root / ".determystic" / "tests" / f"{name}.determystic"
+
+    def _relative_project_path(self, path: Path) -> str:
+        return str(path.relative_to(self.config_root))

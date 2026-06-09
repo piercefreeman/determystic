@@ -74,7 +74,7 @@ async def new_validator_command(path: Path | None):
         console.print(f"[dim]Formatted validator name: {validator_name}[/dim]")
     
     # Check if validator already exists
-    existing_validators = list(config_manager.validators.values())
+    existing_validators = list(config_manager.get_custom_validators().values())
     if any(v.name == validator_name for v in existing_validators):
         if not Prompt.ask(f"\n[yellow]Validator '{validator_name}' already exists. Overwrite?[/yellow]", choices=["y", "n"], default="n") == "y":
             console.print("[red]Operation cancelled.[/red]")

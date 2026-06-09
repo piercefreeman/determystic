@@ -7,7 +7,7 @@ from unittest.mock import patch
 import pytest
 
 from determystic.cli.common import get_active_validators
-from determystic.configs.project import ProjectConfigManager, ValidatorFile
+from determystic.configs.project import ProjectConfigManager
 
 
 @pytest.fixture(autouse=True)
@@ -87,14 +87,7 @@ def test_custom_validators_are_active_by_default() -> None:
                 ]
             )
         )
-        config = ProjectConfigManager(
-            validators={
-                "custom": ValidatorFile(
-                    name="custom",
-                    validator_path=".determystic/validations/custom.determystic",
-                )
-            }
-        )
+        config = ProjectConfigManager()
 
         with patch.object(ProjectConfigManager, "get_possible_config_paths", return_value=[config_file]):
             active_names = [validator.name for validator in get_active_validators(config)]

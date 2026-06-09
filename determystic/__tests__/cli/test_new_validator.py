@@ -50,6 +50,7 @@ async def test_new_validator_command_reports_save_errors() -> None:
     config = SimpleNamespace(
         settings=SimpleNamespace(validator_agent="codex"),
         validators={},
+        get_custom_validators=MagicMock(return_value={}),
         new_validation=MagicMock(side_effect=RuntimeError("disk full")),
         save_to_disk=MagicMock(),
     )

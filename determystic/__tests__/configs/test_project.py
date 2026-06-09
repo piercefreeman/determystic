@@ -2,7 +2,6 @@
 
 import tempfile
 import tomllib
-from datetime import datetime
 from pathlib import Path
 from typing import Type
 from unittest.mock import patch
@@ -52,7 +51,6 @@ class TestValidatorFile:
         assert validator_file.validator_path == validator_path
         assert validator_file.test_path == test_path
         assert validator_file.description == description
-        assert isinstance(validator_file.created_at, datetime)
 
     @pytest.mark.parametrize("invalid_data,error_type", [
         ({}, ValidationError),  # Missing required fields
@@ -171,8 +169,6 @@ class TestProjectConfigManagerInstanceMethods:
                 assert isinstance(validator_file, ValidatorFile)
                 assert validator_file.name == name
                 assert validator_file.description == description
-                assert isinstance(validator_file.created_at, datetime)
-                
                 # Verify paths are relative to the project root
                 config_root = config_file.parent / ".determystic"
                 expected_validator_path = f".determystic/validations/{name}.determystic"
@@ -193,9 +189,6 @@ class TestProjectConfigManagerInstanceMethods:
                 # Verify validator was added to config
                 assert name in config.validators
                 assert config.validators[name] == validator_file
-                
-                # Verify updated_at was set
-                assert isinstance(config.updated_at, datetime)
 
     @pytest.mark.parametrize("existing_validators,validator_to_delete,expected_result", [
         (["validator1", "validator2"], "validator1", True),
@@ -228,7 +221,6 @@ class TestProjectConfigManagerInstanceMethods:
                     config.validators[validator_name] = validator_file
                 
                 original_count = len(config.validators)
-                original_updated_at = config.updated_at
                 
                 # Test deletion
                 result = config.delete_validation(validator_to_delete)
@@ -240,17 +232,12 @@ class TestProjectConfigManagerInstanceMethods:
                     # Validator should be removed
                     assert validator_to_delete not in config.validators
                     assert len(config.validators) == original_count - 1
-                    # updated_at should be changed
-                    assert config.updated_at > original_updated_at
                 else:
                     # Nothing should change
                     assert len(config.validators) == original_count
-                    # updated_at should remain the same (allowing for small time differences)
-                    time_diff = abs((config.updated_at - original_updated_at).total_seconds())
-                    assert time_diff < 0.1
 
-    def test_new_validation_updates_timestamp(self) -> None:
-        """Test that new_validation updates the updated_at timestamp."""
+    def test_new_validation_metadata_is_not_required_for_discovery(self) -> None:
+        """New standard validator files are discoverable without persisted metadata."""
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
             config_file = temp_path / "pyproject.toml"
@@ -258,16 +245,12 @@ class TestProjectConfigManagerInstanceMethods:
             
             with patch.object(ProjectConfigManager, 'get_possible_config_paths', return_value=[config_file]):
                 config = ProjectConfigManager()
-                original_updated_at = config.updated_at
-                
-                # Small delay to ensure timestamp difference
-                import time
-                time.sleep(0.01)
-                
                 config.new_validation("test", "# code", "# test", "description")
-                
-                # Verify timestamp was updated
-                assert config.updated_at > original_updated_at
+
+                custom_validators = config.get_custom_validators()
+
+                assert set(custom_validators) == {"test"}
+                assert custom_validators["test"].validator_path == ".determystic/validations/test.determystic"
 
     def test_new_validation_creates_directories(self) -> None:
         """Test that new_validation creates necessary directories."""
@@ -432,6 +415,69 @@ validator_path = ".determystic/validations/custom.determystic"
         assert config.validators["custom"].config == {"forbidden_name": "bad_pattern"}
         assert config._get_validator_config_data("custom") == {
             "forbidden_name": "bad_pattern"
+        }
+
+    def test_get_custom_validators_discovers_standard_validation_files(self) -> None:
+        """Standard .determystic validation files are custom validators by convention."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            config_file = temp_path / "pyproject.toml"
+            validator_file = temp_path / ".determystic" / "validations" / "custom.determystic"
+            test_file = temp_path / ".determystic" / "tests" / "custom.determystic"
+            validator_file.parent.mkdir(parents=True)
+            test_file.parent.mkdir(parents=True)
+            validator_file.write_text("# validator")
+            test_file.write_text("# tests")
+            config_file.write_text("[tool.determystic]\n")
+
+            config = ProjectConfigManager.load_from_config_path(config_file)
+            custom_validators = config.get_custom_validators()
+
+        assert set(custom_validators) == {"custom"}
+        assert custom_validators["custom"].validator_path == ".determystic/validations/custom.determystic"
+        assert custom_validators["custom"].test_path == ".determystic/tests/custom.determystic"
+
+    def test_save_to_pyproject_omits_standard_validator_metadata(self) -> None:
+        """Generated validators should not create a pyproject registry entry."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            config_file = temp_path / "pyproject.toml"
+            config_file.write_text("")
+
+            with patch.object(ProjectConfigManager, 'get_possible_config_paths', return_value=[config_file]):
+                config = ProjectConfigManager()
+                config.new_validation("custom", "# validator", "# tests", "Generated validator")
+                config.save_to_disk()
+
+                with config_file.open("rb") as f:
+                    saved_data = tomllib.load(f)
+
+        determystic_data = saved_data["tool"]["determystic"]
+        assert determystic_data == {}
+
+    def test_save_to_pyproject_preserves_nonstandard_validator_paths(self) -> None:
+        """Explicit metadata remains available for nonstandard validator locations."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            config_file = temp_path / "pyproject.toml"
+            config_file.write_text("")
+
+            with patch.object(ProjectConfigManager, 'get_possible_config_paths', return_value=[config_file]):
+                config = ProjectConfigManager(
+                    validators={
+                        "custom": ValidatorFile(
+                            name="custom",
+                            validator_path="validators/custom.determystic",
+                        )
+                    }
+                )
+                config.save_to_disk()
+
+                with config_file.open("rb") as f:
+                    saved_data = tomllib.load(f)
+
+        assert saved_data["tool"]["determystic"]["validators"]["custom"] == {
+            "validator_path": "validators/custom.determystic"
         }
 
     def test_save_to_pyproject_serializes_validator_configs_under_validator_sections(self) -> None:

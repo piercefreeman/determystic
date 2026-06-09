@@ -22,6 +22,7 @@ def list_validators_command(path: Path | None):
     
     # Get all validators (built-in and custom)
     all_validators = create_all_validators(config_manager)
+    custom_validators = config_manager.get_custom_validators()
     
     if not all_validators:
         console.print(Panel(
@@ -70,7 +71,7 @@ def list_validators_command(path: Path | None):
         # Handle description and files for custom vs built-in validators
         if is_custom:
             # Custom validator - check file existence
-            validator_file = config_manager.validators.get(validator.name)
+            validator_file = custom_validators.get(validator.name)
             if validator_file:
                 validator_file_path = config_manager.resolve_project_path(validator_file.validator_path)
                 test_file_path = (
