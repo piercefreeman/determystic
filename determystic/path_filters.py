@@ -1,5 +1,6 @@
 """Shared project path filtering for validators."""
 
+import os
 from fnmatch import fnmatchcase
 from pathlib import Path
 
@@ -18,22 +19,56 @@ def iter_python_files(
     isolation_paths: list[str] | tuple[str, ...] | None = None,
 ) -> list[Path]:
     """Return Python files that are visible to validators."""
-    return [
-        py_file
-        for py_file in project_root.rglob("*.py")
-        if _is_relevant_python_file(py_file)
-        and not is_ignored_path(py_file, project_root, isolation_paths)
-        and (
-            include_ignored
-            or not is_ignored_path(
-                py_file,
-                project_root,
-                ignore_paths,
-                include_paths=include_paths,
+    root = project_root
+    if any(part.startswith(".") for part in root.parts) or "__pycache__" in root.parts:
+        return []
+
+    ignore = _clean_patterns(ignore_paths)
+    include = _clean_patterns(include_paths)
+    isolation = _clean_patterns(isolation_paths)
+
+    # Non-glob patterns match a path and everything beneath it, so directories
+    # they match can be skipped without descending into them. Glob patterns are
+    # still evaluated per file below.
+    prune_prefixes = set(_non_glob_patterns(isolation))
+    if not include_ignored:
+        prune_prefixes.update(_non_glob_patterns(ignore))
+
+    python_files: list[Path] = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        relative_dir = os.path.relpath(dirpath, root).replace(os.sep, "/")
+        if relative_dir == ".":
+            relative_dir = ""
+
+        dirnames[:] = [
+            dirname
+            for dirname in dirnames
+            if not dirname.startswith(".")
+            and dirname != "__pycache__"
+            and not _is_pruned_dir(
+                f"{relative_dir}/{dirname}" if relative_dir else dirname,
+                prune_prefixes,
             )
-        )
-        and (include_tests or not is_test_file(py_file))
-    ]
+        ]
+
+        for filename in filenames:
+            if not filename.endswith(".py") or filename.startswith("."):
+                continue
+            relative = f"{relative_dir}/{filename}" if relative_dir else filename
+            if _matches_patterns(relative, isolation):
+                continue
+            if not include_ignored:
+                if _matches_patterns(relative, ignore):
+                    continue
+                if include and not _matches_patterns(relative, include):
+                    continue
+            path = Path(dirpath) / filename
+            if not include_tests and is_test_file(path):
+                continue
+            python_files.append(path)
+
+    python_files.sort()
+    return python_files
 
 
 def is_ignored_path(
@@ -65,12 +100,32 @@ def is_test_file(path: Path) -> bool:
     )
 
 
-def _is_relevant_python_file(path: Path) -> bool:
-    """Return whether a Python file should be considered before config ignores."""
-    return (
-        not any(part.startswith(".") for part in path.parts)
-        and "__pycache__" not in path.parts
+def _clean_patterns(
+    patterns: list[str] | tuple[str, ...] | None,
+) -> tuple[str, ...]:
+    if not patterns:
+        return ()
+    return tuple(pattern for pattern in patterns if pattern.strip())
+
+
+def _non_glob_patterns(patterns: tuple[str, ...]) -> list[str]:
+    normalized = (_normalize_ignore_pattern(pattern) for pattern in patterns)
+    return [
+        pattern
+        for pattern in normalized
+        if pattern and not any(char in pattern for char in GLOB_CHARS)
+    ]
+
+
+def _is_pruned_dir(relative_dir: str, prune_prefixes: set[str]) -> bool:
+    return any(
+        relative_dir == prefix or relative_dir.startswith(f"{prefix}/")
+        for prefix in prune_prefixes
     )
+
+
+def _matches_patterns(relative_path: str, patterns: tuple[str, ...]) -> bool:
+    return any(_matches_ignore_pattern(relative_path, pattern) for pattern in patterns)
 
 
 def _matches_any_pattern(

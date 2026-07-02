@@ -211,14 +211,20 @@ class DeterministicTraverser(ast.NodeVisitor):
         
         self.errors.append(issue)
     
-    def validate(self) -> ValidationResult:
+    def validate(self, tree: ast.AST | None = None) -> ValidationResult:
         """Run the validation by parsing and traversing the AST.
-        
+
+        Args:
+            tree: Optional pre-parsed AST for ``self.code``. When provided the
+                parse step is skipped, letting callers share one tree across
+                several validators.
+
         Returns:
             ValidationResult with all collected errors
         """
         try:
-            tree = ast.parse(self.code, filename=self.filename)
+            if tree is None:
+                tree = ast.parse(self.code, filename=self.filename)
             self.visit(tree)
         except SyntaxError as e:
             # Add syntax error as a validation issue
