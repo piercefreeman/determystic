@@ -3,7 +3,23 @@
 
 import importlib
 
-import click
+import rich_click as click
+
+# Match the shared palette in determystic.cli.ui without importing it here:
+# subcommand modules pull in heavy dependencies (the agent stack,
+# prompt_toolkit) that would otherwise slow down every CLI invocation.
+_ACCENT = "#a78bfa"
+
+click.rich_click.MAX_WIDTH = 100
+click.rich_click.SHOW_ARGUMENTS = True
+click.rich_click.STYLE_OPTION = f"bold {_ACCENT}"
+click.rich_click.STYLE_ARGUMENT = f"bold {_ACCENT}"
+click.rich_click.STYLE_COMMAND = f"bold {_ACCENT}"
+click.rich_click.STYLE_SWITCH = "bold cyan"
+click.rich_click.STYLE_USAGE = f"bold {_ACCENT}"
+click.rich_click.STYLE_HELPTEXT = ""
+click.rich_click.STYLE_OPTIONS_PANEL_BORDER = "grey35"
+click.rich_click.STYLE_COMMANDS_PANEL_BORDER = "grey35"
 
 
 # Subcommand modules are imported on first use: some of them pull in heavy
@@ -18,7 +34,7 @@ _LAZY_COMMANDS = {
 }
 
 
-class LazyCommandGroup(click.Group):
+class LazyCommandGroup(click.RichGroup):
     """Click group that defers importing subcommand modules until needed."""
 
     def list_commands(self, ctx: click.Context) -> list[str]:  # determystic: used

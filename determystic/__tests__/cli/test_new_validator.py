@@ -40,7 +40,7 @@ async def test_new_validator_command_exits_when_agent_selection_fails() -> None:
             await _invoke_new_validator_command()
 
     mock_exit.assert_called_once_with(1)
-    assert "codex unavailable" in str(mock_print.call_args_list[0])
+    assert "codex unavailable" in str(mock_print.call_args_list)
 
 
 # determystic: tested-exceptions[determystic.cli.new_validator.new_validator_command: Exception]
@@ -64,18 +64,19 @@ async def test_new_validator_command_reports_save_errors() -> None:
     with (
         patch("determystic.cli.new_validator.ProjectConfigManager.load_from_disk", return_value=config),
         patch("determystic.cli.new_validator.select_local_agent", return_value="codex"),
-        patch("determystic.cli.new_validator.get_multiline_input", new=AsyncMock(return_value="bad code")),
+        patch("determystic.cli.ui.multiline_input", new=AsyncMock(return_value="bad code")),
         patch(
-            "determystic.cli.new_validator.Prompt.ask",
-            side_effect=["detect bad code", "save-error-validator", "y"],
+            "determystic.cli.ui.text_input",
+            new=AsyncMock(side_effect=["detect bad code", "save-error-validator"]),
         ),
-        patch(
-            "determystic.cli.new_validator.stream_create_validator_with_local_agent",
-            new=fake_stream_create_validator_with_local_agent,
-        ),
+        patch("determystic.cli.ui.confirm", new=AsyncMock(return_value=True)),
         patch("determystic.cli.new_validator.console.print") as mock_print,
     ):
-        await _invoke_new_validator_command()
+        with patch(
+            "determystic.cli.new_validator.stream_create_validator_with_local_agent",
+            new=fake_stream_create_validator_with_local_agent,
+        ):
+            await _invoke_new_validator_command()
 
     config.save_to_disk.assert_not_called()
     assert "Error saving validator files: disk full" in str(mock_print.call_args_list)

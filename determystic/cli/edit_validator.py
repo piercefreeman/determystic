@@ -3,12 +3,7 @@
 import sys
 from pathlib import Path
 
-import click
-from rich.console import Console
-from rich.panel import Panel
-from rich.prompt import Prompt
-from rich.syntax import Syntax
-from rich.table import Table
+import rich_click as click
 
 from determystic.configs.project import ProjectConfigManager, ValidatorFile
 from determystic.agents.local_agent import (
@@ -16,10 +11,10 @@ from determystic.agents.local_agent import (
     select_local_agent,
     stream_edit_validator_with_local_agent,
 )
-from determystic.cli.interactive import get_multiline_input, render_agent_stream
+from determystic.cli import ui
 from determystic.io import async_to_sync
 
-console = Console()
+console = ui.console
 
 
 @click.command()
@@ -37,31 +32,28 @@ async def edit_validator_command(name: str | None, path: Path | None):
     if path:
         ProjectConfigManager.set_runtime_custom_path(path)
 
+    ui.banner("edit-validator")
+
     config_manager = ProjectConfigManager.load_from_disk()
 
     custom_validators = config_manager.get_custom_validators()
     if not custom_validators:
-        console.print(Panel(
-            "[yellow]No custom validators found in this project.[/yellow]\n"
-            "[dim]Run 'determystic new-validator' to create your first validator.[/dim]",
-            title="Edit Validator",
-            border_style="yellow"
-        ))
+        ui.warning("No custom validators found in this project.")
+        ui.hint("run 'determystic new-validator' to create your first validator")
         sys.exit(1)
 
     try:
         selected_agent = select_local_agent(config_manager.settings.validator_agent)
     except LocalAgentSelectionError as e:
-        console.print(f"[red]{e}[/red]")
+        ui.error(str(e))
         sys.exit(1)
 
     # Resolve which validator to edit
     if name is None:
-        console.print("\n[bold]Step 1: Choose the validator to edit[/bold]")
-        name = _prompt_for_validator(custom_validators)
+        name = await _prompt_for_validator(custom_validators)
     elif name not in custom_validators:
-        console.print(f"[red]Validator '{name}' not found in this project.[/red]")
-        console.print(f"[dim]Available validators: {', '.join(sorted(custom_validators))}[/dim]")
+        ui.error(f"Validator '{name}' not found in this project.")
+        ui.hint(f"available validators: {', '.join(sorted(custom_validators))}")
         sys.exit(1)
 
     validator_file = custom_validators[name]
@@ -69,7 +61,7 @@ async def edit_validator_command(name: str | None, path: Path | None):
     # Load the current validator contents from disk
     validator_path = config_manager.resolve_project_path(validator_file.validator_path)
     if not validator_path.exists():
-        console.print(f"[red]Validator file is missing on disk: {validator_path}[/red]")
+        ui.error(f"Validator file is missing on disk: {validator_path}")
         sys.exit(1)
     validation_contents = validator_path.read_text()
 
@@ -80,36 +72,38 @@ async def edit_validator_command(name: str | None, path: Path | None):
             test_contents = test_path.read_text()
 
     # Show the current validator
-    console.print(f"\n[bold]Current validator: {name}[/bold]")
+    ui.section(f"Current validator: {name}", step="1/2")
     if validator_file.description:
-        console.print(f"[dim]{validator_file.description}[/dim]")
-    syntax = Syntax(validation_contents, "python", theme="monokai", line_numbers=True)
-    console.print(Panel(syntax, border_style="blue"))
+        ui.hint(validator_file.description)
+    ui.code_block(validation_contents, title=name, line_numbers=True)
 
     # Get the requested changes
-    console.print("\n[bold]Step 2: Describe the changes[/bold]")
-    change_request = await get_multiline_input(
-        "Describe how the validator should change (new patterns to catch, false positives to fix, etc.):"
+    ui.section("Describe the changes", step="2/2")
+    change_request = await ui.multiline_input(
+        "How should the validator change?",
+        description="New patterns to catch, false positives to fix, etc.",
     )
 
     if not change_request:
-        console.print("[red]No changes described. Exiting.[/red]")
+        ui.error("No changes described.")
         sys.exit(1)
 
     # Confirm before proceeding
-    console.print("\n[bold]Summary:[/bold]")
-    console.print(f"  • Validator: {name}")
-    console.print(f"  • Requested changes: {change_request}")
+    console.print()
+    ui.detail("validator", name)
+    ui.detail("changes", change_request)
+    console.print()
 
-    if not Prompt.ask("\n[yellow]Proceed with editing the validator?[/yellow]", choices=["y", "n"], default="y") == "y":
-        console.print("[red]Operation cancelled.[/red]")
+    if not await ui.confirm("Apply these changes?"):
+        ui.hint("cancelled")
         sys.exit(0)
 
     # Run the agent
-    console.print(f"\n[bold cyan]🤖 Starting AST Validator Agent ({selected_agent})...[/bold cyan]")
-    console.print("[dim]This may take a few moments as the agent edits and tests the validator.[/dim]\n")
+    console.print()
+    ui.hint(f"handing off to {selected_agent} — it will edit and re-test the validator")
+    console.print()
 
-    final_event = await render_agent_stream(
+    final_event = await ui.render_agent_stream(
         stream_edit_validator_with_local_agent(
             validator_name=name,
             change_request=change_request,
@@ -121,17 +115,14 @@ async def edit_validator_command(name: str | None, path: Path | None):
     )
 
     if not final_event:
-        console.print("\n[red]Error: No final event received from the agent.[/red]")
+        ui.error("No final event received from the agent.")
         sys.exit(1)
-
-    console.print("\n[bold green]✅ Agent completed successfully![/bold green]")
-    console.print(Panel(final_event.content, title="Final Result", border_style="green"))
 
     updated_validation = final_event.deps.validation_contents
     updated_tests = final_event.deps.test_contents
 
     if not updated_validation:
-        console.print("\n[yellow]Warning: No updated files were generated by the agent.[/yellow]")
+        ui.warning("No updated files were generated by the agent.")
         return
 
     try:
@@ -144,10 +135,12 @@ async def edit_validator_command(name: str | None, path: Path | None):
         # Save the config to disk
         config_manager.save_to_disk()
 
-        console.print("\n[bold green]✅ Validator updated successfully![/bold green]")
-        console.print(f"  • Validator: {updated_file.validator_path}")
+        console.print()
+        ui.success("Validator updated")
+        ui.detail("validator", updated_file.validator_path)
         if updated_file.test_path:
-            console.print(f"  • Test: {updated_file.test_path}")
+            ui.detail("tests", updated_file.test_path)
+        console.print()
 
         # Show preview of the updated validator
         lines = updated_validation.split("\n")[:10]
@@ -155,30 +148,16 @@ async def edit_validator_command(name: str | None, path: Path | None):
         if len(updated_validation.split("\n")) > 10:
             preview += "\n..."
 
-        syntax = Syntax(preview, "python", theme="monokai", line_numbers=False)
-        console.print(Panel(syntax, title=f"Preview: {name}", border_style="green"))
+        ui.code_block(preview, title=name)
 
     except Exception as e:
-        console.print(f"[red]Error saving validator files: {e}[/red]")
+        console.print(f"[error]Error saving validator files: {e}[/error]")
 
 
-def _prompt_for_validator(custom_validators: dict[str, ValidatorFile]) -> str:
-    """Show the available custom validators and prompt for a selection."""
-    table = Table(show_header=True, header_style="bold cyan")
-    table.add_column("Name", style="cyan", width=30)
-    table.add_column("Description", width=50)
-
-    for validator_name in sorted(custom_validators):
-        validator_file = custom_validators[validator_name]
-        table.add_row(
-            validator_name,
-            validator_file.description or "[dim]No description[/dim]",
-        )
-
-    console.print(table)
-
-    return Prompt.ask(
-        "\nValidator name",
-        choices=sorted(custom_validators),
-        show_choices=False,
-    )
+async def _prompt_for_validator(custom_validators: dict[str, ValidatorFile]) -> str:
+    """Prompt for a validator with an arrow-key selection menu."""
+    choices = [
+        (validator_name, custom_validators[validator_name].description)
+        for validator_name in sorted(custom_validators)
+    ]
+    return await ui.select_option("Which validator do you want to edit?", choices)

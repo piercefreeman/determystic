@@ -1,79 +1,70 @@
 """Configuration command for setting up API keys and other settings."""
 
 
-import click
-from rich.console import Console
-from rich.panel import Panel
-from rich.prompt import Prompt
+import rich_click as click
 
+from determystic.cli import ui
 from determystic.configs.system import DeterministicSettings
+from determystic.io import async_to_sync
 
-console = Console()
+console = ui.console
 
 
 @click.command()
-def configure_command():
+@async_to_sync
+async def configure_command():
     """Configure API keys and other settings for the determystic tool."""
-    console.print(Panel.fit(
-        "[bold cyan]Deterministic Configuration[/bold cyan]\n"
-        "Set up your API keys and preferences",
-        border_style="cyan"
-    ))
-    
+    ui.banner("configure", subtitle="set up API keys and preferences")
+
     # Load existing settings or create new ones
     settings = DeterministicSettings.load_from_disk(required=False)
 
     if not settings:
         settings = DeterministicSettings()
- 
+
     # Convert existing values to a simple dict
     existing_values = settings.model_dump()
-    
-    console.print("\n[dim]Configuring settings...[/dim]")
-    
+
     # Iterate through all model fields
     for field_name, field_info in settings.model_fields.items():
         current_value = existing_values.get(field_name)
         description = field_info.description or f"Enter {field_name.replace('_', ' ')}"
-        
-        # Show field description
-        console.print(f"\n[bold]{field_name.replace('_', ' ').title()}[/bold]")
-        console.print(f"[dim]{description}[/dim]")
-        
-        # Show current value if it exists
-        current_display = ""
+        sensitive = _is_sensitive_field(field_name)
+
+        # Show masked current value for sensitive fields; prefill the rest
         if current_value:
             masked_value = _mask_sensitive_value(str(current_value), field_name)
-            current_display = f" [dim](current: {masked_value})[/dim]"
-        
-        # Get new value
-        new_value = Prompt.ask(
-            f"Enter {field_name.replace('_', ' ')}{current_display}",
-            password=_is_sensitive_field(field_name),
-            default=current_value if current_value else None
+            description += f" (current: {masked_value})"
+
+        new_value = await ui.text_input(
+            field_name.replace('_', ' ').title(),
+            description=description,
+            password=sensitive,
+            placeholder="press enter to keep current value" if current_value else None,
         )
-        
+
         # Update the settings if a value was provided
         if new_value:
             setattr(settings, field_name, new_value)
-    
+
     # Save configuration
     settings.save_to_disk()
     config_path = settings.get_config_path()
-    
-    console.print("\n[bold green]✅ Configuration saved successfully![/bold green]")
-    console.print(f"[dim]Configuration file: {config_path}[/dim]")
-    
+
+    console.print()
+    ui.success("Configuration saved")
+    ui.hint(str(config_path))
+
     # Show what was configured
-    console.print("\n[bold]Configured settings:[/bold]")
-    for field_name, field_info in settings.model_fields.items():
+    console.print()
+    for field_name in settings.model_fields:
         current_value = getattr(settings, field_name)
         if current_value:
             masked_value = _mask_sensitive_value(str(current_value), field_name)
-            console.print(f"  • {field_name.replace('_', ' ').title()}: {masked_value}")
-    
-    console.print("\n[green]You can now use the determystic tools![/green]")
-    console.print("[dim]Try: determystic new-validator[/dim]")
+            ui.detail(field_name.replace('_', ' '), masked_value)
+
+    console.print()
+    ui.hint("try: determystic new-validator")
 
 
 def _is_sensitive_field(field_name: str) -> bool:

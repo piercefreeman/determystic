@@ -87,8 +87,7 @@ async def test_edit_validator_command_exits_without_custom_validators() -> None:
             await _invoke_edit_validator_command()
 
     mock_exit.assert_called_once_with(1)
-    panel = mock_print.call_args_list[0].args[0]
-    assert "No custom validators found" in str(panel.renderable)
+    assert "No custom validators found" in str(mock_print.call_args_list)
 
 
 @pytest.mark.asyncio
@@ -132,8 +131,8 @@ async def test_edit_validator_command_saves_updated_files(tmp_path: Path) -> Non
     with (
         patch("determystic.cli.edit_validator.ProjectConfigManager.load_from_disk", return_value=config),
         patch("determystic.cli.edit_validator.select_local_agent", return_value="codex"),
-        patch("determystic.cli.edit_validator.get_multiline_input", new=AsyncMock(return_value="also flag Union")),
-        patch("determystic.cli.edit_validator.Prompt.ask", return_value="y"),
+        patch("determystic.cli.ui.multiline_input", new=AsyncMock(return_value="also flag Union")),
+        patch("determystic.cli.ui.confirm", new=AsyncMock(return_value=True)),
         patch(
             "determystic.cli.edit_validator.stream_edit_validator_with_local_agent",
             new=fake_stream_edit_validator_with_local_agent,
@@ -174,8 +173,8 @@ async def test_edit_validator_command_reports_save_errors(tmp_path: Path) -> Non
     with (
         patch("determystic.cli.edit_validator.ProjectConfigManager.load_from_disk", return_value=config),
         patch("determystic.cli.edit_validator.select_local_agent", return_value="codex"),
-        patch("determystic.cli.edit_validator.get_multiline_input", new=AsyncMock(return_value="also flag Union")),
-        patch("determystic.cli.edit_validator.Prompt.ask", return_value="y"),
+        patch("determystic.cli.ui.multiline_input", new=AsyncMock(return_value="also flag Union")),
+        patch("determystic.cli.ui.confirm", new=AsyncMock(return_value=True)),
         patch(
             "determystic.cli.edit_validator.stream_edit_validator_with_local_agent",
             new=fake_stream_edit_validator_with_local_agent,

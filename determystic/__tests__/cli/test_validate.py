@@ -6,6 +6,7 @@ from typing import cast
 from rich.console import Console
 
 import determystic.cli.validate as validate_module
+from determystic.cli.ui import THEME
 from determystic.cli.validate import (
     ValidationJob,
     _create_status_table,
@@ -95,13 +96,13 @@ def test_status_rendering_uses_separate_tables_for_each_scope() -> None:
             target_label="standalone-tool",
         ),
     ]
-    console = Console(record=True, width=120, color_system=None)
+    console = Console(record=True, width=120, color_system=None, theme=THEME)
 
     console.print(_create_status_table(jobs, {}, include_scope=True))
     output = console.export_text()
 
-    assert "Scope: ." in output
-    assert "Scope: standalone-tool" in output
+    assert "▸ ." in output
+    assert "▸ standalone-tool" in output
     assert "│ Scope " not in output
 
 
@@ -130,7 +131,7 @@ def test_detailed_results_are_grouped_by_scope(monkeypatch) -> None:
         "root:static": ValidationResult(success=False, output="root failure"),
         "poc:static": ValidationResult(success=False, output="poc failure"),
     }
-    console = Console(record=True, width=120, color_system=None)
+    console = Console(record=True, width=120, color_system=None, theme=THEME)
     monkeypatch.setattr(validate_module, "console", console)
 
     _print_detailed_results(
@@ -141,8 +142,8 @@ def test_detailed_results_are_grouped_by_scope(monkeypatch) -> None:
     )
     output = console.export_text()
 
-    assert "Scope: ." in output
-    assert "Scope: standalone-tool" in output
+    assert "▸ ." in output
+    assert "▸ standalone-tool" in output
     assert "✗ Static Analysis" in output
     assert ". / Static Analysis" not in output
     assert "standalone-tool / Static Analysis" not in output
