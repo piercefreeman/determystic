@@ -1,23 +1,38 @@
 """Main CLI entry point for the determystic tool."""
 
 
+import importlib
+
 import click
 
-from determystic.cli.validate import validate_command
-from determystic.cli.new_validator import new_validator_command
-from determystic.cli.configure import configure_command
-from determystic.cli.list_validators import list_validators_command
+
+# Subcommand modules are imported on first use: some of them pull in heavy
+# dependencies (the agent stack, prompt_toolkit) that would otherwise slow
+# down every CLI invocation.
+_LAZY_COMMANDS = {
+    "validate": ("determystic.cli.validate", "validate_command"),
+    "new-validator": ("determystic.cli.new_validator", "new_validator_command"),
+    "configure": ("determystic.cli.configure", "configure_command"),
+    "list-validators": ("determystic.cli.list_validators", "list_validators_command"),
+}
 
 
-@click.group()
+class LazyCommandGroup(click.Group):
+    """Click group that defers importing subcommand modules until needed."""
+
+    def list_commands(self, ctx: click.Context) -> list[str]:  # determystic: used
+        return sorted(_LAZY_COMMANDS)
+
+    def get_command(self, ctx: click.Context, cmd_name: str) -> click.Command | None:  # determystic: used
+        target = _LAZY_COMMANDS.get(cmd_name)
+        if target is None:
+            return None
+        module_name, attribute = target
+        return getattr(importlib.import_module(module_name), attribute)
+
+
+@click.group(cls=LazyCommandGroup)
 @click.version_option()
 def cli():
     """Deterministic - Python code validation and AST analysis tools."""
     pass
-
-
-# Register subcommands
-cli.add_command(validate_command, name="validate")
-cli.add_command(new_validator_command, name="new-validator")
-cli.add_command(configure_command, name="configure")
-cli.add_command(list_validators_command, name="list-validators")

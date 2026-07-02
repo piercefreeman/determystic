@@ -213,9 +213,6 @@ async def _run_validation_targets(
             _create_status_table(jobs, results, include_scope=include_scope)
         )
 
-        # Give a brief moment for users to see the final status
-        await asyncio.sleep(0.5)
-
     # Display final results
     console.print()  # Add spacing
 

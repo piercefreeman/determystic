@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from fnmatch import fnmatchcase
 from pathlib import Path
@@ -335,11 +336,17 @@ def _scope_is_visible(
 
 def _find_project_roots(root: Path) -> list[Path]:
     project_roots: set[Path] = set()
-    for marker_filename in PROJECT_MARKER_FILENAMES:
-        for path in root.rglob(marker_filename):
-            if _has_skipped_part(path.relative_to(root)):
-                continue
-            project_roots.add(path.parent.resolve())
+    for dirpath, dirnames, filenames in os.walk(root):
+        # Skipped and hidden directories can never contain project roots that
+        # validators would see (path filters exclude dot-dirs), so don't descend.
+        dirnames[:] = [
+            dirname
+            for dirname in dirnames
+            if dirname not in SKIPPED_PROJECT_DIR_NAMES
+            and not dirname.startswith(".")
+        ]
+        if PROJECT_MARKER_FILENAMES.intersection(filenames):
+            project_roots.add(Path(dirpath).resolve())
     return sorted(project_roots)
 
 
