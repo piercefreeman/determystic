@@ -147,9 +147,6 @@ version = "1.0"
         config_path.write_text('''
 [tool.determystic]
 version = "1.0"
-[tool.determystic.validators.test_validator]
-name = "test_validator"
-validator_path = ".determystic/validations/test_validator.determystic"
 [tool.determystic.settings]
 ''')
 
@@ -180,9 +177,6 @@ validator_path = ".determystic/validations/test_validator.determystic"
         config_path.write_text('''
 [tool.determystic]
 version = "1.0"
-[tool.determystic.validators.test_validator]
-name = "test_validator"
-validator_path = ".determystic/validations/test_validator.determystic"
 [tool.determystic.settings]
 ''')
         
@@ -253,9 +247,6 @@ class ConfiguredValidator(DeterministicTraverser):
         config_path.write_text('''
 [tool.determystic]
 version = "1.0"
-[tool.determystic.validators.configured]
-name = "configured"
-validator_path = ".determystic/validations/configured.determystic"
 [tool.determystic.validators.configured.config]
 forbidden_name = "configured_bad"
 ''')
@@ -300,9 +291,6 @@ class ConfiguredValidator(DeterministicTraverser):
         config_path.write_text('''
 [tool.determystic]
 version = "1.0"
-[tool.determystic.validators.configured]
-name = "configured"
-validator_path = ".determystic/validations/configured.determystic"
 [tool.determystic.validators.configured.config]
 threshold = "not an int"
 ''')

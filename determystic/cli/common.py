@@ -30,7 +30,7 @@ def is_validator_enabled(
     validator_selectors = _validator_selectors(validator)
     excluded = {
         _normalize_validator_selector(value)
-        for value in project_config.exclude
+        for value in project_config.validator_exclude
     }
     if validator_selectors & excluded:
         return False
@@ -40,7 +40,7 @@ def is_validator_enabled(
 
     enabled = {
         _normalize_validator_selector(value)
-        for value in project_config.enabled
+        for value in project_config.validator_enabled
     }
     return bool(validator_selectors & enabled or enabled & {"*", "all", "bundled"})
 

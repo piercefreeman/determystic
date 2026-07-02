@@ -17,7 +17,7 @@ def test_discovers_uv_workspace_members_with_inherited_root_config(tmp_path) -> 
 name = "root"
 
 [tool.determystic]
-enabled = ["all"]
+validator_enabled = ["all"]
 
 [tool.uv.workspace]
 members = ["packages/*"]
@@ -59,7 +59,7 @@ def test_uv_workspace_member_config_overrides_inherited_root_config(tmp_path) ->
 name = "root"
 
 [tool.determystic]
-enabled = ["all"]
+validator_enabled = ["all"]
 
 [tool.uv.workspace]
 members = ["packages/*"]
@@ -74,7 +74,7 @@ exclude = ["standalone-tool"]
 name = "api"
 
 [tool.determystic]
-enabled = ["hanging_functions"]
+validator_enabled = ["hanging_functions"]
 """
     )
 
@@ -92,7 +92,7 @@ def test_uv_workspace_root_also_discovers_nested_project_markers(tmp_path) -> No
 name = "root"
 
 [tool.determystic]
-enabled = ["all"]
+validator_enabled = ["all"]
 
 [tool.uv.workspace]
 members = ["packages/*"]
@@ -131,7 +131,7 @@ def test_uv_workspace_member_path_inherits_root_config(tmp_path) -> None:
 name = "root"
 
 [tool.determystic]
-enabled = ["all"]
+validator_enabled = ["all"]
 
 [tool.uv.workspace]
 members = ["packages/*"]
@@ -159,7 +159,7 @@ def test_discovers_non_uv_nested_pyprojects_as_isolated_targets(tmp_path) -> Non
 name = "root"
 
 [tool.determystic]
-enabled = ["all"]
+validator_enabled = ["all"]
 """
     )
     _write_pyproject(tmp_path / "services" / "api", "api")
@@ -228,6 +228,74 @@ def test_load_pyproject_returns_empty_data_for_missing_or_invalid_toml(tmp_path)
     invalid_pyproject.write_text("[project\n")
 
     assert _load_pyproject(invalid_pyproject) == {}
+
+
+def test_paths_exclude_prunes_nested_project_scopes(tmp_path) -> None:
+    """Nested project markers under paths_exclude entries do not become scopes."""
+    (tmp_path / "pyproject.toml").write_text(
+        """
+[project]
+name = "root"
+
+[tool.determystic]
+paths_exclude = [".claude/", "poc/"]
+"""
+    )
+    _write_pyproject(tmp_path / ".claude" / "worktrees" / "feature", "feature")
+    _write_pyproject(tmp_path / "poc", "poc")
+    _write_pyproject(tmp_path / "services" / "api", "api")
+
+    targets = discover_validation_targets(tmp_path)
+
+    project_roots = {
+        target.project_root.relative_to(tmp_path).as_posix() for target in targets
+    }
+    assert project_roots == {".", "services/api"}
+
+
+def test_paths_include_keeps_only_intersecting_scopes(tmp_path) -> None:
+    """paths_include drops nested scopes outside the include list, keeping the root."""
+    (tmp_path / "pyproject.toml").write_text(
+        """
+[project]
+name = "root"
+
+[tool.determystic]
+paths_include = ["services/api/"]
+"""
+    )
+    _write_pyproject(tmp_path / "services" / "api", "api")
+    _write_pyproject(tmp_path / "services" / "worker", "worker")
+
+    targets = discover_validation_targets(tmp_path)
+
+    project_roots = {
+        target.project_root.relative_to(tmp_path).as_posix() for target in targets
+    }
+    assert project_roots == {".", "services/api"}
+
+
+def test_paths_include_keeps_scopes_that_contain_include_entries(tmp_path) -> None:
+    """A scope containing an included path still runs so those files validate."""
+    (tmp_path / "pyproject.toml").write_text(
+        """
+[project]
+name = "root"
+
+[tool.determystic]
+paths_include = ["services/api/handlers/"]
+"""
+    )
+    _write_pyproject(tmp_path / "services" / "api", "api")
+    (tmp_path / "services" / "api" / "handlers").mkdir()
+    _write_pyproject(tmp_path / "services" / "worker", "worker")
+
+    targets = discover_validation_targets(tmp_path)
+
+    project_roots = {
+        target.project_root.relative_to(tmp_path).as_posix() for target in targets
+    }
+    assert project_roots == {".", "services/api"}
 
 
 # determystic: tested-exceptions[determystic.project_discovery._is_relative_to: ValueError]

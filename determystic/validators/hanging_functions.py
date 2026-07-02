@@ -7,10 +7,10 @@ legitimately look unused from inside a single codebase.
 """
 
 import ast
-import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
+from determystic.compat import tomllib
 from determystic.configs.project import ProjectConfigManager
 from determystic.path_filters import is_ignored_path, iter_python_files
 from determystic.suppressions import SuppressionComments
@@ -298,10 +298,12 @@ class HangingFunctionsValidator(BaseValidator):
         name: str = "hanging_functions",
         path: Path | None = None,
         ignore_paths: list[str] | None = None,
+        include_paths: list[str] | None = None,
         isolation_paths: list[str] | None = None,
     ) -> None:
         super().__init__(name=name, path=path)
         self.ignore_paths = ignore_paths or []
+        self.include_paths = include_paths or []
         self.isolation_paths = isolation_paths or []
 
     @classmethod
@@ -312,7 +314,8 @@ class HangingFunctionsValidator(BaseValidator):
         return [
             cls(
                 path=config_manager.project_root,
-                ignore_paths=config_manager.ignore_paths,
+                ignore_paths=config_manager.paths_exclude,
+                include_paths=config_manager.paths_include,
                 isolation_paths=config_manager.isolation_paths,
             )
         ]
@@ -323,6 +326,7 @@ class HangingFunctionsValidator(BaseValidator):
         reportable_python_files = iter_python_files(
             self.path,
             self.ignore_paths,
+            include_paths=self.include_paths,
             include_tests=False,
             isolation_paths=self.isolation_paths,
         )
@@ -344,7 +348,12 @@ class HangingFunctionsValidator(BaseValidator):
                 content = py_file.read_text(encoding="utf-8")
                 tree = ast.parse(content, filename=str(py_file))
                 relative_path = str(py_file.relative_to(self.path))
-                if is_ignored_path(py_file, self.path, self.ignore_paths):
+                if is_ignored_path(
+                    py_file,
+                    self.path,
+                    self.ignore_paths,
+                    include_paths=self.include_paths,
+                ):
                     ignored_modules.add(relative_path)
                 suppressions = SuppressionComments.from_source(content, tree)
                 suppressions_by_module[relative_path] = suppressions

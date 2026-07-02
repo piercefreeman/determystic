@@ -30,8 +30,9 @@ class TestStaticAnalysisValidator:
         # Mock ProjectConfigManager
         mock_config_manager = MagicMock(spec=ProjectConfigManager)
         mock_config_manager.project_root = path
-        mock_config_manager.ignore_paths = []
-        
+        mock_config_manager.paths_exclude = []
+        mock_config_manager.paths_include = []
+
         validators = StaticAnalysisValidator.create_validators(mock_config_manager)
         
         assert len(validators) == 2
@@ -52,7 +53,8 @@ class TestStaticAnalysisValidator:
 
         mock_config_manager = MagicMock(spec=ProjectConfigManager)
         mock_config_manager.project_root = path
-        mock_config_manager.ignore_paths = ["generated/", "vendor/client.py"]
+        mock_config_manager.paths_exclude = ["generated/", "vendor/client.py"]
+        mock_config_manager.paths_include = []
 
         validators = StaticAnalysisValidator.create_validators(mock_config_manager)
 
@@ -80,6 +82,43 @@ class TestStaticAnalysisValidator:
             "vendor/client.py",
             "--force-exclude",
         ]
+
+    def test_create_validators_uses_paths_include_as_check_targets(self, tmp_path) -> None:
+        """Include entries become the CLI check targets; missing paths are dropped."""
+        (tmp_path / "api").mkdir()
+
+        mock_config_manager = MagicMock(spec=ProjectConfigManager)
+        mock_config_manager.project_root = tmp_path
+        mock_config_manager.paths_exclude = []
+        mock_config_manager.paths_include = ["api/", "missing/"]
+
+        validators = StaticAnalysisValidator.create_validators(mock_config_manager)
+
+        ruff_validator = cast(StaticAnalysisValidator, validators[0])
+        ty_validator = cast(StaticAnalysisValidator, validators[1])
+        assert ruff_validator.command == ["ruff", "check", str(tmp_path / "api"), "--no-fix"]
+        assert ty_validator.command == ["ty", "check", str(tmp_path / "api")]
+
+    def test_create_validators_glob_includes_fall_back_to_project_root(self, tmp_path) -> None:
+        """Glob include entries cannot be CLI targets, so the whole project is checked."""
+        mock_config_manager = MagicMock(spec=ProjectConfigManager)
+        mock_config_manager.project_root = tmp_path
+        mock_config_manager.paths_exclude = []
+        mock_config_manager.paths_include = ["api/*.py"]
+
+        validators = StaticAnalysisValidator.create_validators(mock_config_manager)
+
+        ruff_validator = cast(StaticAnalysisValidator, validators[0])
+        assert ruff_validator.command == ["ruff", "check", str(tmp_path), "--no-fix"]
+
+    def test_create_validators_returns_nothing_when_no_include_targets_exist(self, tmp_path) -> None:
+        """No existing include targets means there is nothing to check."""
+        mock_config_manager = MagicMock(spec=ProjectConfigManager)
+        mock_config_manager.project_root = tmp_path
+        mock_config_manager.paths_exclude = []
+        mock_config_manager.paths_include = ["missing/"]
+
+        assert StaticAnalysisValidator.create_validators(mock_config_manager) == []
 
     @pytest.mark.asyncio
     async def test_validate_success(self) -> None:

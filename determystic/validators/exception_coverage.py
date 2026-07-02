@@ -175,10 +175,12 @@ class ExceptionCoverageValidator(BaseValidator):
         name: str = "exception_coverage",
         path: Path | None = None,
         ignore_paths: list[str] | None = None,
+        include_paths: list[str] | None = None,
         isolation_paths: list[str] | None = None,
     ) -> None:
         super().__init__(name=name, path=path)
         self.ignore_paths = ignore_paths or []
+        self.include_paths = include_paths or []
         self.isolation_paths = isolation_paths or []
 
     @classmethod
@@ -189,7 +191,8 @@ class ExceptionCoverageValidator(BaseValidator):
         return [
             cls(
                 path=config_manager.project_root,
-                ignore_paths=config_manager.ignore_paths,
+                ignore_paths=config_manager.paths_exclude,
+                include_paths=config_manager.paths_include,
                 isolation_paths=config_manager.isolation_paths,
             )
         ]
@@ -218,6 +221,7 @@ class ExceptionCoverageValidator(BaseValidator):
         return iter_python_files(
             path,
             self.ignore_paths,
+            include_paths=self.include_paths,
             include_tests=False,
             isolation_paths=self.isolation_paths,
         )
@@ -270,7 +274,12 @@ class ExceptionCoverageValidator(BaseValidator):
 
             source, tree = parsed
             relative_path = str(py_file.relative_to(self.path))
-            is_ignored = is_ignored_path(py_file, self.path, self.ignore_paths)
+            is_ignored = is_ignored_path(
+                py_file,
+                self.path,
+                self.ignore_paths,
+                include_paths=self.include_paths,
+            )
             markers = _parse_test_markers(source)
             functions = _test_functions(tree)
             module_context = _test_module_context(

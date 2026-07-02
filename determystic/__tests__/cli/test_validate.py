@@ -26,8 +26,8 @@ def test_create_validation_jobs_scopes_inherited_config_to_target_root(tmp_path)
 name = "workspace"
 
 [tool.determystic]
-enabled = ["hanging_functions"]
-ignore_paths = ["generated/"]
+validator_enabled = ["hanging_functions"]
+paths_exclude = ["generated/"]
 """
     )
     member_root = tmp_path / "packages" / "api"
@@ -60,7 +60,7 @@ def test_create_validation_jobs_uses_unique_keys_for_duplicate_validator_names(t
 name = "single"
 
 [tool.determystic]
-enabled = ["static_analysis"]
+validator_enabled = ["static_analysis"]
 """
     )
     target = ValidationTarget(project_root=tmp_path, config_path=root_pyproject)

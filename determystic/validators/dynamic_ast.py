@@ -23,12 +23,14 @@ class DynamicASTValidator(BaseValidator):
         validator_path: Path,
         path: Path | None = None,
         ignore_paths: list[str] | None = None,
+        include_paths: list[str] | None = None,
         isolation_paths: list[str] | None = None,
         config_data: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(name=name, path=path)
         self.validator_path = validator_path
         self.ignore_paths = ignore_paths or []
+        self.include_paths = include_paths or []
         self.isolation_paths = isolation_paths or []
         self.config_data = config_data or {}
         self.traverser_class = self._load_validator_module(validator_path)
@@ -41,11 +43,11 @@ class DynamicASTValidator(BaseValidator):
         """Factory function that creates DynamicASTValidator instances for each determystic validator."""
         validators = []
         
-        if not config_manager or not config_manager.validators:
+        if not config_manager:
             return validators
 
         # Load each validator file as a separate validator instance
-        for validator_file in config_manager.validators.values():
+        for validator_file in config_manager.get_custom_validators().values():
             validator_path = config_manager.resolve_project_path(validator_file.validator_path)
             
             # Create a DynamicASTValidator for this specific validator
@@ -53,7 +55,8 @@ class DynamicASTValidator(BaseValidator):
                 name=validator_file.name,
                 validator_path=validator_path,
                 path=config_manager.project_root,
-                ignore_paths=config_manager.ignore_paths,
+                ignore_paths=config_manager.paths_exclude,
+                include_paths=config_manager.paths_include,
                 isolation_paths=config_manager.isolation_paths,
                 config_data=config_manager._get_validator_config_data(validator_file.name),
             )
@@ -82,6 +85,7 @@ class DynamicASTValidator(BaseValidator):
         python_files = iter_python_files(
             self.path,
             self.ignore_paths,
+            include_paths=self.include_paths,
             isolation_paths=self.isolation_paths,
         )
         

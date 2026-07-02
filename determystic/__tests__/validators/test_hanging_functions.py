@@ -1,12 +1,12 @@
 """Tests for hanging functions validator functionality."""
 
 import tempfile
-import tomllib
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
+from determystic.compat import tomllib
 from determystic.validators.hanging_functions import HangingFunctionsValidator
 from determystic.configs.project import ProjectConfigManager
 
