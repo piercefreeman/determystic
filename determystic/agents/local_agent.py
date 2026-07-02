@@ -76,6 +76,48 @@ Please:
 Remember: Focus on minimal viable reproduction cases for both good and bad behavior within the AST parsing and testing framework.
 """
 
+LOCAL_AGENT_EDIT_INSTRUCTIONS_TEMPLATE = """## Local CLI Instructions
+
+You are running inside a temporary workspace for determystic.
+
+The workspace already contains an existing validator and its test suite:
+- validator.py
+- test_validator.py
+
+Edit these two files in place to apply the requested changes. Do not modify any other
+files. The caller will read these files and run them in an isolated determystic test
+environment after your command exits.
+
+The current `determystic.external` interface is:
+```python
+{external_interface}
+```
+
+Key reminders:
+- The validator should flag problematic code with `is_valid=False`.
+- Only change behavior described by the requested changes; preserve everything else.
+- Update the tests to cover the new behavior, keeping still-correct existing cases.
+- The caller will run the updated tests after your command exits.
+"""
+
+LOCAL_AGENT_EDIT_TASK_PROMPT_TEMPLATE = """Edit the existing AST validator '{validator_name}' and its test suite.
+
+Current validator description: {description}
+
+Requested changes:
+{change_request}
+
+Please:
+1. Read validator.py and test_validator.py to understand the current behavior
+2. Apply the requested changes to the validator implementation
+3. Update the pytest tests to cover the changed behavior:
+   - Examples that should now be flagged as problematic
+   - Examples of valid code that should NOT be flagged
+   - Existing cases that remain correct should keep passing
+4. Ensure the tests are executable by pytest; the caller will run them after this command exits
+5. The validator should identify the SPECIFIC issue described, not general code quality
+"""
+
 LOCAL_AGENT_RETRY_PROMPT_TEMPLATE = """The previous attempt failed validation or tests. Fix the files using this feedback:
 
 {previous_failure}
@@ -163,6 +205,53 @@ async def stream_create_validator_with_local_agent(
     )
 
 
+async def stream_edit_validator_with_local_agent(
+    validator_name: str,
+    change_request: str,
+    validation_contents: str,
+    test_contents: str,
+    agent_name: LocalAgentName,
+    description: str | None = None,
+) -> AsyncGenerator[StreamEvent, None]:
+    """Stream coarse progress events while a local CLI agent edits a validator."""
+    deps = AgentDependencies()
+
+    yield StreamEvent(
+        event_type="user_prompt",
+        content=f"Editing validator '{validator_name}' with local {agent_name} agent",
+        deps=deps,
+    )
+    yield StreamEvent(
+        event_type="model_request_start",
+        content=f"{agent_name} is updating validator files...",
+        deps=deps,
+    )
+
+    result = await asyncio.to_thread(
+        _edit_validator_with_local_agent,
+        validator_name,
+        change_request,
+        validation_contents,
+        test_contents,
+        agent_name,
+        description=description,
+    )
+
+    deps.validation_contents = result.validation_contents
+    deps.test_contents = result.test_contents
+
+    yield StreamEvent(
+        event_type="tool_call_end",
+        content="Updated validator tests passed in the isolated environment.",
+        deps=deps,
+    )
+    yield StreamEvent(
+        event_type="final_result",
+        content=result.summary,
+        deps=deps,
+    )
+
+
 def _external_interface() -> str:
     """Read the external validator interface for local CLI agents."""
     external_path = Path(__file__).resolve().parents[1] / "external.py"
@@ -181,6 +270,28 @@ def _build_prompt(user_code: str, requirements: str | None, previous_failure: st
         external_interface=_external_interface(),
     )
     prompt_sections = [LOCAL_AGENT_SYSTEM_PROMPT, local_instructions, task_prompt]
+    if previous_failure:
+        prompt_sections.append(
+            LOCAL_AGENT_RETRY_PROMPT_TEMPLATE.format(previous_failure=previous_failure)
+        )
+    return "\n\n".join(prompt_sections)
+
+
+def _build_edit_prompt(
+    validator_name: str,
+    change_request: str,
+    description: str | None,
+    previous_failure: str | None = None,
+) -> str:
+    task_prompt = LOCAL_AGENT_EDIT_TASK_PROMPT_TEMPLATE.format(
+        validator_name=validator_name,
+        description=description or "No description provided",
+        change_request=change_request,
+    )
+    edit_instructions = LOCAL_AGENT_EDIT_INSTRUCTIONS_TEMPLATE.format(
+        external_interface=_external_interface(),
+    )
+    prompt_sections = [LOCAL_AGENT_SYSTEM_PROMPT, edit_instructions, task_prompt]
     if previous_failure:
         prompt_sections.append(
             LOCAL_AGENT_RETRY_PROMPT_TEMPLATE.format(previous_failure=previous_failure)
@@ -308,3 +419,53 @@ def _create_validator_with_local_agent(
             )
 
         raise LocalAgentExecutionError(previous_failure or "Local agent failed to generate a validator.")
+
+
+def _edit_validator_with_local_agent(
+    validator_name: str,
+    change_request: str,
+    validation_contents: str,
+    test_contents: str,
+    agent_name: LocalAgentName,
+    *,
+    description: str | None = None,
+    max_attempts: int = 2,
+    timeout_seconds: int = 600,
+) -> LocalAgentResult:
+    """Edit an existing AST validator by running an installed local CLI agent."""
+    previous_failure: str | None = None
+
+    with tempfile.TemporaryDirectory(prefix="determystic_agent_") as temp_dir:
+        workdir = Path(temp_dir)
+        (workdir / "validator.py").write_text(validation_contents)
+        (workdir / "test_validator.py").write_text(test_contents)
+
+        for attempt in range(1, max_attempts + 1):
+            prompt = _build_edit_prompt(validator_name, change_request, description, previous_failure)
+            summary, updated_validation, updated_tests = _run_agent_once(
+                agent_name=agent_name,
+                workdir=workdir,
+                prompt=prompt,
+                timeout_seconds=timeout_seconds,
+            )
+
+            with IsolatedEnv() as env:
+                tests_passed, test_output = env.run_tests(
+                    validator_code=updated_validation,
+                    test_code=updated_tests,
+                )
+
+            if tests_passed:
+                return LocalAgentResult(
+                    summary=summary or f"{agent_name} updated the validator.",
+                    validation_contents=updated_validation,
+                    test_contents=updated_tests,
+                    tests_passed=True,
+                    test_output=test_output,
+                )
+
+            previous_failure = (
+                f"Attempt {attempt} produced updated files, but their tests failed:\n\n{test_output}"
+            )
+
+        raise LocalAgentExecutionError(previous_failure or "Local agent failed to edit the validator.")

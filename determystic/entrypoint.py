@@ -12,6 +12,7 @@ import click
 _LAZY_COMMANDS = {
     "validate": ("determystic.cli.validate", "validate_command"),
     "new-validator": ("determystic.cli.new_validator", "new_validator_command"),
+    "edit-validator": ("determystic.cli.edit_validator", "edit_validator_command"),
     "configure": ("determystic.cli.configure", "configure_command"),
     "list-validators": ("determystic.cli.list_validators", "list_validators_command"),
 }

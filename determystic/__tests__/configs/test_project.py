@@ -292,12 +292,78 @@ class TestProjectConfigManagerInstanceMethods:
                 assert not tests_dir.exists()
                 
                 config.new_validation("test", "# code", "# test")
-                
+
                 # Verify directories were created
                 assert validations_dir.exists()
                 assert tests_dir.exists()
                 assert validations_dir.is_dir()
                 assert tests_dir.is_dir()
+
+    def test_update_validation_rewrites_files_in_place(self) -> None:
+        """Updating a validator rewrites its files and keeps its metadata."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            config_file = temp_path / "pyproject.toml"
+            config_file.write_text("[tool.determystic]\n")
+
+            config = ProjectConfigManager.load_from_config_path(config_file)
+            original = config.new_validation("custom", "# old code", "# old test", "Original description")
+
+            updated = config.update_validation("custom", "# new code", "# new test")
+
+            assert updated.name == "custom"
+            assert updated.description == "Original description"
+            assert updated.validator_path == original.validator_path
+            assert updated.test_path == original.test_path
+            assert config.validators["custom"] == updated
+
+            assert config.resolve_project_path(updated.validator_path).read_text() == "# new code"
+            assert updated.test_path is not None
+            assert config.resolve_project_path(updated.test_path).read_text() == "# new test"
+
+    def test_update_validation_replaces_description_when_provided(self) -> None:
+        """An explicit description replaces the stored one."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            config_file = temp_path / "pyproject.toml"
+            config_file.write_text("[tool.determystic]\n")
+
+            config = ProjectConfigManager.load_from_config_path(config_file)
+            config.new_validation("custom", "# old code", "# old test", "Original description")
+
+            updated = config.update_validation("custom", "# new code", "# new test", "New description")
+
+            assert updated.description == "New description"
+
+    def test_update_validation_handles_discovered_validator_without_test_file(self) -> None:
+        """Discovered validators without tests gain a test file at the default path."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            config_file = temp_path / "pyproject.toml"
+            validator_file = temp_path / ".determystic" / "validations" / "custom.determystic"
+            validator_file.parent.mkdir(parents=True)
+            validator_file.write_text("# validator")
+            config_file.write_text("[tool.determystic]\n")
+
+            config = ProjectConfigManager.load_from_config_path(config_file)
+
+            updated = config.update_validation("custom", "# new code", "# new test")
+
+            assert updated.test_path == ".determystic/tests/custom.determystic"
+            assert validator_file.read_text() == "# new code"
+            assert (temp_path / ".determystic" / "tests" / "custom.determystic").read_text() == "# new test"
+
+    def test_update_validation_requires_existing_validator(self) -> None:
+        """Updating an unknown validator raises instead of silently creating one."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            config_file = temp_path / "pyproject.toml"
+            config_file.write_text("[tool.determystic]\n")
+
+            config = ProjectConfigManager.load_from_config_path(config_file)
+
+            with pytest.raises(KeyError, match="missing"):
+                config.update_validation("missing", "# code", "# test")
 
 
 class TestProjectConfigManagerIntegration:
