@@ -1,7 +1,7 @@
 """Parameterized tests for project configuration management."""
 
 import tempfile
-import tomllib
+from determystic.compat import tomllib
 from pathlib import Path
 from typing import Type
 from unittest.mock import patch
@@ -235,6 +235,29 @@ class TestProjectConfigManagerInstanceMethods:
                 else:
                     # Nothing should change
                     assert len(config.validators) == original_count
+
+    def test_delete_validation_removes_discovered_validator_files(self) -> None:
+        """Deleting a discovered validator removes its files even without config metadata."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            config_file = temp_path / "pyproject.toml"
+            validator_file = temp_path / ".determystic" / "validations" / "custom.determystic"
+            test_file = temp_path / ".determystic" / "tests" / "custom.determystic"
+            validator_file.parent.mkdir(parents=True)
+            test_file.parent.mkdir(parents=True)
+            validator_file.write_text("# validator")
+            test_file.write_text("# tests")
+            config_file.write_text("[tool.determystic]\n")
+
+            config = ProjectConfigManager.load_from_config_path(config_file)
+
+            assert config.delete_validation("custom") is True
+            assert not validator_file.exists()
+            assert not test_file.exists()
+            assert config.get_custom_validators() == {}
+
+            # A second delete finds nothing left to remove
+            assert config.delete_validation("custom") is False
 
     def test_new_validation_metadata_is_not_required_for_discovery(self) -> None:
         """New standard validator files are discoverable without persisted metadata."""

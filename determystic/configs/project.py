@@ -1,6 +1,6 @@
 """Project configuration management for determystic validators."""
 
-import tomllib
+from determystic.compat import tomllib
 from typing import Any, ClassVar, Literal, TypeVar
 from pathlib import Path
 
@@ -323,18 +323,25 @@ class ProjectConfigManager(BaseConfig):
         return validator_file
     
     def delete_validation(self, name: str) -> bool:  # determystic: used
-        """Remove a validator from the project configuration.
-        
+        """Remove a validator from the project configuration and disk.
+
         Args:
             name: Name of the validator to remove
-            
+
         Returns:
             True if the validator was removed, False if it didn't exist
         """
-        if name in self.validators:
-            del self.validators[name]
-            return True
-        return False
+        validator_file = self.get_custom_validators().get(name)
+        if validator_file is None:
+            return False
+
+        self.validators.pop(name, None)
+
+        self.resolve_project_path(validator_file.validator_path).unlink(missing_ok=True)
+        if validator_file.test_path is not None:
+            self.resolve_project_path(validator_file.test_path).unlink(missing_ok=True)
+
+        return True
 
     def resolve_project_path(self, path: str | Path) -> Path:
         """Resolve a project-relative path from the pyproject configuration."""

@@ -1,12 +1,13 @@
 """Base configuration management for the determystic tool."""
 
-import tomllib
 import tomli_w
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import ClassVar, Type, TypeVar
 
 from pydantic import BaseModel
+
+from determystic.compat import tomllib
 
 T = TypeVar('T', bound='BaseConfig')
 

@@ -6,10 +6,10 @@ used only inside their defining file or class.
 """
 
 import ast
-import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from determystic.compat import tomllib
 from determystic.configs.project import ProjectConfigManager
 from determystic.path_filters import is_ignored_path, iter_python_files
 from determystic.suppressions import SuppressionComments

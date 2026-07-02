@@ -1,7 +1,6 @@
 """Parameterized tests for base configuration management."""
 
 import tempfile
-import tomllib
 import tomli_w
 from pathlib import Path
 from typing import Type
@@ -10,6 +9,7 @@ from unittest.mock import patch
 import pytest
 from pydantic import ValidationError
 
+from determystic.compat import tomllib
 from determystic.configs.base import BaseConfig
 
 

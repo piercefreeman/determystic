@@ -7,10 +7,10 @@ legitimately look unused from inside a single codebase.
 """
 
 import ast
-import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
+from determystic.compat import tomllib
 from determystic.configs.project import ProjectConfigManager
 from determystic.path_filters import is_ignored_path, iter_python_files
 from determystic.suppressions import SuppressionComments

@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import tomllib
 from dataclasses import dataclass
 from fnmatch import fnmatchcase
 from pathlib import Path
 from typing import Any
 
+from determystic.compat import tomllib
 from determystic.io import detect_pyproject_path
 
 
