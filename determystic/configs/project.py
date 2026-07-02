@@ -77,14 +77,21 @@ class ProjectConfigManager(BaseConfig):
     version: str = Field(default="1.0", description="Configuration version")
     project_name: str | None = Field(default=None, description="Name of the project")
 
-    exclude: list[str] = Field(default_factory=list, description="List of validators to exclude from validation")
-    enabled: list[str] = Field(
+    validator_exclude: list[str] = Field(
+        default_factory=list,
+        description="List of validators to exclude from validation",
+    )
+    validator_enabled: list[str] = Field(
         default_factory=list,
         description="List of bundled validators to enable. Custom validators are enabled by default.",
     )
-    ignore_paths: list[str] = Field(
+    paths_include: list[str] = Field(
         default_factory=list,
-        description="Project-relative files, directories, or glob patterns to ignore during validation.",
+        description="Project-relative files, directories, or glob patterns to validate. Empty validates all paths.",
+    )
+    paths_exclude: list[str] = Field(
+        default_factory=list,
+        description="Project-relative files, directories, or glob patterns to skip during validation.",
     )
     
     # Validator files tracking
@@ -109,15 +116,11 @@ class ProjectConfigManager(BaseConfig):
     @model_validator(mode="before")
     @classmethod
     def migrate_project_config(cls, data: Any) -> Any:
-        """Normalize project config aliases and split validator metadata from config."""
+        """Split validator metadata from per-validator config sections."""
         if not isinstance(data, dict):
             return data
 
-        values = dict(data)
-        if "ignore_paths" not in values and "ignored_paths" in values:
-            values["ignore_paths"] = values.pop("ignored_paths")
-        values = cls._split_validator_config_sections(values)
-        return values
+        return cls._split_validator_config_sections(dict(data))
 
     @staticmethod
     def _split_validator_config_sections(values: dict[str, Any]) -> dict[str, Any]:
@@ -241,8 +244,8 @@ class ProjectConfigManager(BaseConfig):
                 for ignore_path in extra_ignore_paths
                 if ignore_path.strip()
             ]
-            config.ignore_paths = [
-                *config.ignore_paths,
+            config.paths_exclude = [
+                *config.paths_exclude,
                 *config._isolation_paths,
             ]
         return config

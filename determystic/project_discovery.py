@@ -9,6 +9,7 @@ from typing import Any
 
 from determystic.compat import tomllib
 from determystic.io import detect_pyproject_path
+from determystic.path_filters import matches_path_pattern
 
 
 SKIPPED_PROJECT_DIR_NAMES = {
@@ -61,6 +62,7 @@ def discover_validation_targets(start_path: Path) -> list[ValidationTarget]:
         workspace_targets = _discover_uv_workspace_targets(start, root_pyproject)
         workspace_exclude = _uv_workspace_exclude_patterns(root_pyproject)
         workspace_members = _uv_workspace_member_patterns(root_pyproject)
+        paths_include, paths_exclude = _determystic_path_filters(root_pyproject)
         project_roots = _find_project_roots(start)
         if workspace_exclude:
             project_roots = [
@@ -79,8 +81,22 @@ def discover_validation_targets(start_path: Path) -> list[ValidationTarget]:
                     )
                 )
             ]
+        project_roots = [
+            project_root
+            for project_root in project_roots
+            if _scope_is_visible(project_root, start, paths_include, paths_exclude)
+        ]
         if workspace_targets or len(project_roots) > 1:
-            workspace_roots = [target.project_root for target in workspace_targets]
+            workspace_roots = [
+                target.project_root
+                for target in workspace_targets
+                if _scope_is_visible(
+                    target.project_root,
+                    start,
+                    paths_include,
+                    paths_exclude,
+                )
+            ]
             return _targets_from_project_roots(
                 [*workspace_roots, *project_roots],
                 inherited_config_path=inherited_config_path,
@@ -271,6 +287,50 @@ def _is_workspace_member_candidate(
         for member_pattern in member_patterns
         for member_root in _glob_workspace_member_dirs(workspace_root, member_pattern)
     )
+
+
+def _determystic_path_filters(pyproject_path: Path) -> tuple[list[str], list[str]]:
+    """Return (paths_include, paths_exclude) from a pyproject's determystic config."""
+    data = _load_pyproject(pyproject_path)
+    determystic_data = data.get("tool", {}).get("determystic")
+    if not isinstance(determystic_data, dict):
+        return [], []
+    return (
+        _string_list(determystic_data.get("paths_include")),
+        _string_list(determystic_data.get("paths_exclude")),
+    )
+
+
+def _scope_is_visible(
+    scope_root: Path,
+    start: Path,
+    paths_include: list[str],
+    paths_exclude: list[str],
+) -> bool:
+    """Return whether a discovered project scope survives the root path filters."""
+    if not paths_include and not paths_exclude:
+        return True
+    if not _is_relative_to(scope_root, start):
+        return True
+
+    relative = _relative_posix_path(scope_root, start)
+    if relative == ".":
+        return True
+
+    if any(matches_path_pattern(relative, pattern) for pattern in paths_exclude):
+        return False
+    if not paths_include:
+        return True
+
+    # Keep the scope when it falls under an include entry, or when an include
+    # entry lives inside the scope (its files still need this scope to run).
+    for pattern in paths_include:
+        if matches_path_pattern(relative, pattern):
+            return True
+        normalized = _normalize_workspace_pattern(pattern)
+        if normalized.startswith(f"{relative}/"):
+            return True
+    return False
 
 
 def _find_project_roots(root: Path) -> list[Path]:

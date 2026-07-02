@@ -92,7 +92,7 @@ The main control we have over these systems today is in their system prompts: sp
 
 ## Bundled validators
 
-Determystic includes bundled validators that can replace parts of a conventional lint stack. Bundled validators are opt-in: list the ones you want under `[tool.determystic].enabled`. Custom validators created in your project are enabled automatically unless excluded.
+Determystic includes bundled validators that can replace parts of a conventional lint stack. Bundled validators are opt-in: list the ones you want under `[tool.determystic].validator_enabled`. Custom validators created in your project are enabled automatically unless excluded.
 
 | Name | Validator | Description | Powered By |
 |------|-----------|-------------|------------|
@@ -104,7 +104,15 @@ Determystic includes bundled validators that can replace parts of a conventional
 
 ## Configuration
 
-You can customize which validators run in your project by adding a `[tool.determystic]` section to your project `pyproject.toml`. The configuration supports enabling bundled validators, excluding specific validators from running, and ignoring generated or vendored paths.
+You can customize which validators run in your project by adding a `[tool.determystic]` section to your project `pyproject.toml`. The four core keys are:
+
+| Key | Meaning |
+|-----|---------|
+| `validator_enabled` | Bundled validators to run (`["all"]` enables every bundled validator) |
+| `validator_exclude` | Validators (bundled or custom) to skip |
+| `paths_include` | Only validate these project-relative paths; empty means everything |
+| `paths_exclude` | Project-relative paths to skip; wins over `paths_include` on overlap |
+
 Generated custom validators are discovered automatically from `.determystic/validations/*.determystic`; they do not need to be listed in `pyproject.toml`.
 
 ### Workspaces And Multi-Project Repos
@@ -113,38 +121,51 @@ When `validate` runs against a directory with `[tool.uv.workspace]`, Determystic
 
 Repos without uv workspace metadata but with multiple nested Python project markers are handled similarly: each project is validated independently, and parent scopes ignore nested project directories so project-wide validators do not analyze subprojects as one flattened codebase. Determystic treats `pyproject.toml`, `setup.py`, and `setup.cfg` as Python project markers.
 
-`ignore_paths` entries are relative to the project scope being validated. Generated custom validator files are discovered under the `.determystic/validations` directory next to the `pyproject.toml` that owns the `[tool.determystic]` config.
+`paths_include` and `paths_exclude` entries are relative to the project scope being validated. Nested project markers under a `paths_exclude` entry (or outside `paths_include` when it is set) do not become validation scopes of their own. Generated custom validator files are discovered under the `.determystic/validations` directory next to the `pyproject.toml` that owns the `[tool.determystic]` config.
 
 ### Enabling Bundled Validators
 
-To enable bundled validators, add their names to the `enabled` list in your config:
+To enable bundled validators, add their names to the `validator_enabled` list in your config:
 
 ```toml
 # pyproject.toml
 [tool.determystic]
-enabled = [
+validator_enabled = [
     "static_analysis",
     "function_visibility"
 ]
 ```
 
-Use `enabled = ["all"]` to opt into every bundled validator explicitly.
+Use `validator_enabled = ["all"]` to opt into every bundled validator explicitly.
 
-### Ignoring Files And Directories
+### Including And Excluding Paths
 
-To skip generated, vendored, or otherwise out-of-scope code across all validators, add project-relative entries to `ignore_paths`:
+To skip generated, vendored, or otherwise out-of-scope code across all validators, add project-relative entries to `paths_exclude`:
 
 ```toml
 # pyproject.toml
 [tool.determystic]
-ignore_paths = [
+paths_exclude = [
     "generated/",
     "vendor/client.py",
     "build/**/*.py"
 ]
 ```
 
-Directory entries ignore everything below that directory. Glob-style entries are also supported.
+Directory entries exclude everything below that directory. Glob-style entries are also supported.
+
+In large repos it is often easier to whitelist the paths you care about with `paths_include`:
+
+```toml
+# pyproject.toml
+[tool.determystic]
+paths_include = [
+    "api/",
+    "services/browser-control/"
+]
+```
+
+When `paths_include` is set, only files under those entries are validated; `paths_exclude` still wins on overlap. Static analysis (`ruff`/`ty`) checks the included directories directly, so glob entries in `paths_include` fall back to checking the whole project for those tools.
 
 ### Per-Validator Configuration
 
@@ -179,12 +200,12 @@ The same `[tool.determystic.validators.<name>.config]` convention is available t
 
 ### Excluding Validators
 
-Custom validators are active by default. To disable a custom validator or override an enabled bundled validator, add it to the `exclude` list:
+Custom validators are active by default. To disable a custom validator or override an enabled bundled validator, add it to the `validator_exclude` list:
 
 ```toml
 # pyproject.toml
 [tool.determystic]
-exclude = [
+validator_exclude = [
     "my_custom_validator",
     "Function Visibility"
 ]

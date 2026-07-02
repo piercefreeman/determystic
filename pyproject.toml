@@ -14,7 +14,7 @@ build-backend = "hatchling.build"
 determystic = "determystic.entrypoint:cli"
 
 [tool.determystic]
-enabled = [ "all",]
+validator_enabled = [ "all",]
 
 [tool.uv]
 package = true

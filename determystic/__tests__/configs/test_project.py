@@ -315,9 +315,10 @@ name = "sample"
 [tool.determystic]
 version = "2.0"
 project_name = "configured_project"
-exclude = ["Static Analysis"]
-enabled = ["Function Visibility"]
-ignore_paths = ["generated/", "vendor/client.py"]
+validator_exclude = ["Static Analysis"]
+validator_enabled = ["Function Visibility"]
+paths_include = ["src/"]
+paths_exclude = ["generated/", "vendor/client.py"]
 
 [tool.determystic.settings]
 debug = true
@@ -335,9 +336,10 @@ allowed_names = ["framework_hook"]
 
                 assert config.version == "2.0"
                 assert config.project_name == "configured_project"
-                assert config.exclude == ["Static Analysis"]
-                assert config.enabled == ["Function Visibility"]
-                assert config.ignore_paths == ["generated/", "vendor/client.py"]
+                assert config.validator_exclude == ["Static Analysis"]
+                assert config.validator_enabled == ["Function Visibility"]
+                assert config.paths_include == ["src/"]
+                assert config.paths_exclude == ["generated/", "vendor/client.py"]
                 assert config.settings.validator_agent == "codex"
                 assert config.settings.model_extra == {"debug": True}
                 assert config.validators == {}
@@ -359,7 +361,7 @@ allowed_names = ["framework_hook"]
 name = "workspace"
 
 [tool.determystic]
-ignore_paths = ["generated/"]
+paths_exclude = ["generated/"]
 
 [tool.determystic.validators.custom]
 name = "custom"
@@ -376,7 +378,7 @@ validator_path = ".determystic/validations/custom.determystic"
             assert config.config_path == config_file.resolve()
             assert config.config_root == workspace_root.resolve()
             assert config.project_root == member_root.resolve()
-            assert config.ignore_paths == ["generated/", "vendor/"]
+            assert config.paths_exclude == ["generated/", "vendor/"]
             assert config.isolation_paths == ["vendor/"]
             assert config.resolve_project_path(
                 ".determystic/validations/custom.determystic"
@@ -387,13 +389,20 @@ validator_path = ".determystic/validations/custom.determystic"
                 / "custom.determystic"
             )
 
-    def test_load_from_pyproject_accepts_ignored_paths_alias(self) -> None:
-        """The older descriptive ignored_paths key maps to ignore_paths."""
+    def test_load_from_pyproject_ignores_legacy_keys(self) -> None:
+        """Legacy key spellings are not aliased onto the new config fields."""
         config = ProjectConfigManager.model_validate(
-            {"ignored_paths": ["generated/"]}
+            {
+                "ignored_paths": ["generated/"],
+                "ignore_paths": ["generated/"],
+                "enabled": ["all"],
+                "exclude": ["Static Analysis"],
+            }
         )
 
-        assert config.ignore_paths == ["generated/"]
+        assert config.paths_exclude == []
+        assert config.validator_enabled == []
+        assert config.validator_exclude == []
 
     def test_validator_config_model_validation(self) -> None:
         """Validator config payloads can be validated against caller-provided models."""

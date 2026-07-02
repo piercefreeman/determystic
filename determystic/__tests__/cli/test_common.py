@@ -37,15 +37,15 @@ def test_bundled_validators_are_disabled_by_default() -> None:
 
 def test_enabled_bundled_validators_are_active() -> None:
     """A bundled validator can be enabled by its config name."""
-    active_names = _with_project_config(ProjectConfigManager(enabled=["static_analysis"]))
+    active_names = _with_project_config(ProjectConfigManager(validator_enabled=["static_analysis"]))
 
     assert active_names == ["static_analysis", "static_analysis"]
 
 
 def test_enabled_accepts_display_names_and_wildcard() -> None:
     """Bundled validators can be selected by display names or an explicit wildcard."""
-    display_name_active = _with_project_config(ProjectConfigManager(enabled=["Function Visibility"]))
-    wildcard_active = _with_project_config(ProjectConfigManager(enabled=["all"]))
+    display_name_active = _with_project_config(ProjectConfigManager(validator_enabled=["Function Visibility"]))
+    wildcard_active = _with_project_config(ProjectConfigManager(validator_enabled=["all"]))
 
     assert display_name_active == ["function_visibility"]
     assert wildcard_active == [
@@ -61,8 +61,8 @@ def test_exclude_overrides_enabled_bundled_validators() -> None:
     """The legacy exclude list still suppresses enabled bundled validators."""
     active_names = _with_project_config(
         ProjectConfigManager(
-            enabled=["static_analysis", "function_visibility"],
-            exclude=["Static Analysis"],
+            validator_enabled=["static_analysis", "function_visibility"],
+            validator_exclude=["Static Analysis"],
         )
     )
 

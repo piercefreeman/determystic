@@ -12,6 +12,7 @@ def iter_python_files(
     project_root: Path,
     ignore_paths: list[str] | tuple[str, ...] | None = None,
     *,
+    include_paths: list[str] | tuple[str, ...] | None = None,
     include_tests: bool = True,
     include_ignored: bool = False,
     isolation_paths: list[str] | tuple[str, ...] | None = None,
@@ -24,7 +25,12 @@ def iter_python_files(
         and not is_ignored_path(py_file, project_root, isolation_paths)
         and (
             include_ignored
-            or not is_ignored_path(py_file, project_root, ignore_paths)
+            or not is_ignored_path(
+                py_file,
+                project_root,
+                ignore_paths,
+                include_paths=include_paths,
+            )
         )
         and (include_tests or not is_test_file(py_file))
     ]
@@ -34,9 +40,20 @@ def is_ignored_path(
     path: Path,
     project_root: Path,
     ignore_paths: list[str] | tuple[str, ...] | None,
+    *,
+    include_paths: list[str] | tuple[str, ...] | None = None,
 ) -> bool:
-    """Return whether a project-relative path matches an ignore entry."""
-    return _is_ignored_path(path, project_root, ignore_paths)
+    """Return whether a path is excluded, or outside the include list when one is set."""
+    if _matches_any_pattern(path, project_root, ignore_paths):
+        return True
+    if include_paths:
+        return not _matches_any_pattern(path, project_root, include_paths)
+    return False
+
+
+def matches_path_pattern(relative_path: str, pattern: str) -> bool:
+    """Return whether a project-relative posix path matches a config path entry."""
+    return _matches_ignore_pattern(relative_path, pattern)
 
 
 def is_test_file(path: Path) -> bool:
@@ -56,13 +73,13 @@ def _is_relevant_python_file(path: Path) -> bool:
     )
 
 
-def _is_ignored_path(
+def _matches_any_pattern(
     path: Path,
     project_root: Path,
-    ignore_paths: list[str] | tuple[str, ...] | None,
+    patterns: list[str] | tuple[str, ...] | None,
 ) -> bool:
-    """Return whether a project-relative path matches an ignore entry."""
-    if not ignore_paths:
+    """Return whether a project-relative path matches any config path entry."""
+    if not patterns:
         return False
 
     try:
@@ -72,9 +89,9 @@ def _is_ignored_path(
 
     relative = relative_path.as_posix()
     return any(
-        _matches_ignore_pattern(relative, ignore_path)
-        for ignore_path in ignore_paths
-        if ignore_path.strip()
+        _matches_ignore_pattern(relative, pattern)
+        for pattern in patterns
+        if pattern.strip()
     )
 
 
