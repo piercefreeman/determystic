@@ -9,8 +9,10 @@ from determystic.agents.local_agent import (
     LocalAgentExecutionError,
     LocalAgentSelectionError,
     _external_interface,
+    _build_edit_prompt,
     _build_prompt,
     _create_validator_with_local_agent,
+    _edit_validator_with_local_agent,
     select_local_agent,
     _read_generated_files,
 )
@@ -114,3 +116,101 @@ def test_create_validator_with_local_agent_retries_failed_tests() -> None:
     assert result.test_contents == "good tests"
     assert result.tests_passed is True
     assert mock_run_agent.call_count == 2
+
+
+def test_build_edit_prompt_describes_existing_workspace() -> None:
+    """The edit prompt should describe in-place edits to the seeded files."""
+    with patch("determystic.agents.local_agent._external_interface", return_value="class X: pass"):
+        prompt = _build_edit_prompt(
+            validator_name="no-optional",
+            change_request="also flag typing.Union[X, None]",
+            description="Disallow Optional type hints",
+            previous_failure="tests failed",
+        )
+
+    assert "Edit the existing AST validator 'no-optional'" in prompt
+    assert "already contains an existing validator" in prompt
+    assert "also flag typing.Union[X, None]" in prompt
+    assert "Disallow Optional type hints" in prompt
+    assert "Create exactly these two files" not in prompt
+    assert "tests failed" in prompt
+
+
+def test_edit_validator_with_local_agent_seeds_existing_files() -> None:
+    """The edit runner should write the current files into the agent workspace."""
+    seeded_files: dict[str, str] = {}
+
+    def fake_run_agent_once(agent_name, workdir, prompt, timeout_seconds):
+        seeded_files["validator.py"] = (workdir / "validator.py").read_text()
+        seeded_files["test_validator.py"] = (workdir / "test_validator.py").read_text()
+        return "edit summary", "updated validator", "updated tests"
+
+    with patch("determystic.agents.local_agent._run_agent_once", side_effect=fake_run_agent_once):
+        with patch("determystic.agents.local_agent.IsolatedEnv") as mock_env:
+            env = mock_env.return_value.__enter__.return_value
+            env.run_tests.return_value = (True, "tests passed")
+
+            result = _edit_validator_with_local_agent(
+                validator_name="no-optional",
+                change_request="also flag Union",
+                validation_contents="original validator",
+                test_contents="original tests",
+                agent_name="codex",
+            )
+
+    assert seeded_files["validator.py"] == "original validator"
+    assert seeded_files["test_validator.py"] == "original tests"
+    assert result.summary == "edit summary"
+    assert result.validation_contents == "updated validator"
+    assert result.test_contents == "updated tests"
+    assert result.tests_passed is True
+
+
+def test_edit_validator_with_local_agent_retries_failed_tests() -> None:
+    """The edit runner should give the CLI one repair attempt when tests fail."""
+    with patch("determystic.agents.local_agent._run_agent_once") as mock_run_agent:
+        mock_run_agent.side_effect = [
+            ("summary", "bad validator", "bad tests"),
+            ("fixed summary", "good validator", "good tests"),
+        ]
+
+        with patch("determystic.agents.local_agent.IsolatedEnv") as mock_env:
+            env = mock_env.return_value.__enter__.return_value
+            env.run_tests.side_effect = [
+                (False, "tests failed"),
+                (True, "tests passed"),
+            ]
+
+            result = _edit_validator_with_local_agent(
+                validator_name="no-optional",
+                change_request="also flag Union",
+                validation_contents="original validator",
+                test_contents="original tests",
+                agent_name="codex",
+            )
+
+    assert result.summary == "fixed summary"
+    assert result.validation_contents == "good validator"
+    assert result.tests_passed is True
+    assert mock_run_agent.call_count == 2
+    retry_prompt = mock_run_agent.call_args_list[1].kwargs["prompt"]
+    assert "tests failed" in retry_prompt
+
+
+def test_edit_validator_with_local_agent_raises_after_exhausted_attempts() -> None:
+    """The edit runner should surface the last failure once attempts run out."""
+    with patch("determystic.agents.local_agent._run_agent_once") as mock_run_agent:
+        mock_run_agent.return_value = ("summary", "bad validator", "bad tests")
+
+        with patch("determystic.agents.local_agent.IsolatedEnv") as mock_env:
+            env = mock_env.return_value.__enter__.return_value
+            env.run_tests.return_value = (False, "tests failed")
+
+            with pytest.raises(LocalAgentExecutionError, match="tests failed"):
+                _edit_validator_with_local_agent(
+                    validator_name="no-optional",
+                    change_request="also flag Union",
+                    validation_contents="original validator",
+                    test_contents="original tests",
+                    agent_name="codex",
+                )

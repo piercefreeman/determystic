@@ -325,6 +325,53 @@ class ProjectConfigManager(BaseConfig):
         
         return validator_file
     
+    def update_validation(
+        self,
+        name: str,
+        validator_script: str,
+        test_script: str,
+        description: str | None = None,
+    ) -> ValidatorFile:
+        """Rewrite an existing validator's files in place.
+
+        Args:
+            name: Name of the validator to update
+            validator_script: New validator file contents
+            test_script: New test file contents
+            description: Optional replacement description; keeps the existing one if None
+
+        Returns:
+            The updated ValidatorFile instance
+
+        Raises:
+            KeyError: If no validator with this name exists
+        """
+        existing = self.get_custom_validators().get(name)
+        if existing is None:
+            raise KeyError(f"Validator '{name}' does not exist in this project.")
+
+        validator_path = self.resolve_project_path(existing.validator_path)
+        test_path = (
+            self.resolve_project_path(existing.test_path)
+            if existing.test_path is not None
+            else self._default_test_path(name)
+        )
+
+        validator_path.parent.mkdir(parents=True, exist_ok=True)
+        test_path.parent.mkdir(parents=True, exist_ok=True)
+
+        validator_path.write_text(validator_script)
+        test_path.write_text(test_script)
+
+        validator_file = existing.model_copy(update={
+            "test_path": existing.test_path or self._relative_project_path(test_path),
+            "description": description if description is not None else existing.description,
+        })
+
+        self.validators[name] = validator_file
+
+        return validator_file
+
     def delete_validation(self, name: str) -> bool:  # determystic: used
         """Remove a validator from the project configuration and disk.
 
